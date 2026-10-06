@@ -108,7 +108,7 @@ const SALE = {
 async function loginAndOpenCash() {
   const user = userEvent.setup();
   render(<App />);
-  await user.type(screen.getByLabelText("Usuario"), "caja1");
+  await user.type(await screen.findByLabelText("Usuario"), "caja1");
   await user.type(screen.getByLabelText("Contraseña"), "clave-segura-2");
   await user.click(screen.getByRole("button", { name: "Entrar" }));
   await user.type(await screen.findByLabelText("Base en efectivo"), "50.000");
@@ -134,6 +134,34 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+describe("primera vez", () => {
+  it("el asistente crea el negocio y entra directo a vender", async () => {
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /setup") return { body: { needs_setup: true } };
+      if (route === "POST /setup") return { status: 201, body: { access_token: "token-1" } };
+      return cashierServer(() => ({ status: 201, body: SALE }))(call);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.type(await screen.findByLabelText(/Nombre del negocio/), "Panadería La Espiga");
+    await user.type(screen.getByLabelText("Su nombre"), "Ana Ruiz");
+    await user.type(screen.getByLabelText(/Usuario para entrar/), "Dueño Ana");
+    await user.type(screen.getByLabelText(/^Contraseña/), "clave-segura-1");
+    await user.type(screen.getByLabelText("Repita la contraseña"), "clave-segura-1");
+    await user.click(screen.getByRole("button", { name: "Empezar a vender" }));
+
+    expect(await screen.findByLabelText("Base en efectivo")).toBeTruthy();
+    expect(calls.find((c) => c.path === "/setup" && c.method === "POST")?.body).toEqual({
+      business_name: "Panadería La Espiga",
+      full_name: "Ana Ruiz",
+      username: "duenoana",
+      password: "clave-segura-1",
+    });
+  });
 });
 
 describe("venta en la caja", () => {

@@ -8,5 +8,5 @@ if not exist .venv\Scripts\python.exe (
   exit /b 1
 )
 echo Punto de venta en marcha. No cierre esta ventana mientras use el sistema.
-.venv\Scripts\python.exe manage.py runserver --open
+.venv\Scripts\python.exe manage.py start
 pause

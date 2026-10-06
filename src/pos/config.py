@@ -6,6 +6,7 @@ métodos de pago, usuarios del plan) vive en BusinessSettings y se cambia por la
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import secrets
@@ -44,6 +45,27 @@ def render_env(template: str, values: Mapping[str, str]) -> str:
 
 def new_secret_key() -> str:
     return secrets.token_urlsafe(48)
+
+
+def ensure_env_file(path: Path, template: str, **values: str) -> bool:
+    """Crea el .env de una instalación nueva con una clave secreta propia. Devuelve True si lo creó."""
+    if path.exists():
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    defaults = {"POS_ENV": "production", "POS_SECRET_KEY": new_secret_key()}
+    path.write_text(render_env(template, {**defaults, **values}), encoding="utf-8")
+    return True
+
+
+def load_config(data_dir: Path) -> AppConfig:
+    """Lee el .env de la carpeta de datos; una base de datos con ruta relativa queda dentro de ella."""
+    load_dotenv(data_dir / ".env")
+    config = AppConfig.from_env()
+    database = Path(config.database_path)
+    if not database.is_absolute():
+        # Relativa a la carpeta de datos, no a donde se ejecuta el comando (p. ej. un acceso directo).
+        config = dataclasses.replace(config, database_path=str(data_dir / database))
+    return config
 
 
 @dataclass(frozen=True)

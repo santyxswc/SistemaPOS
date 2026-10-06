@@ -149,3 +149,12 @@ export function todayISO(): string {
   const offset = now.getTimezoneOffset() * 60000;
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
+
+/** Lo que el servidor acepta como usuario: "Dueño Ana" → "duenoana". */
+export function toUsername(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "") // tildes y diéresis que NFD separa de la letra
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "");
+}

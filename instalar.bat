@@ -31,9 +31,9 @@ if not exist src\pos\presentation\web\static\index.html (
   )
 )
 
-.venv\Scripts\python.exe manage.py init || goto :error
 echo.
-echo Instalacion terminada. Para usar el sistema haga doble clic en iniciar-pos.bat
+echo Instalacion terminada. Haga doble clic en iniciar-pos.bat:
+echo la primera vez el sistema le pedira en el navegador los datos del negocio.
 pause
 exit /b 0
 

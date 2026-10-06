@@ -10,7 +10,7 @@ from ... import __version__
 from ..web import register_web
 from .context import CONTAINER_KEY
 from .errors import register_error_handlers
-from .routes import auth, cash, catalog, customers, inventory, reports, sales, settings, users
+from .routes import auth, cash, catalog, customers, inventory, reports, sales, settings, setup, users
 
 if TYPE_CHECKING:
     from ...bootstrap import Container
@@ -26,7 +26,7 @@ def create_app(container: Container) -> Flask:
 
     register_error_handlers(app)
     _register_cors(app, container.config.cors_origins)
-    for module in (auth, users, settings, catalog, inventory, cash, sales, customers, reports):
+    for module in (setup, auth, users, settings, catalog, inventory, cash, sales, customers, reports):
         app.register_blueprint(module.bp, url_prefix=API_PREFIX)
 
     @app.get("/health")

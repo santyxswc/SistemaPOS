@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { api } from "../api";
-import { Empty, ErrorAlert, Field, Modal, formatDateTime, toast, useAction, useLoad } from "../components/ui";
+import { Empty, ErrorAlert, Field, Modal, formatDateTime, toUsername, toast, useAction, useLoad } from "../components/ui";
 import { useSession } from "../session";
 import type { Items, Role, User } from "../types";
 
@@ -118,7 +118,7 @@ function UserForm(props: { user: User | null; isSelf: boolean; onClose: () => vo
         <ErrorAlert error={error} />
         {!editing && (
           <Field label="Usuario para entrar" hint="Minúsculas, números, punto o guion; de 3 a 32 caracteres">
-            <input className="input" value={form.username} onChange={(e) => set({ username: e.target.value.toLowerCase() })} autoFocus required />
+            <input className="input" value={form.username} onChange={(e) => set({ username: toUsername(e.target.value) })} autoFocus required />
           </Field>
         )}
         <Field label="Nombre completo">

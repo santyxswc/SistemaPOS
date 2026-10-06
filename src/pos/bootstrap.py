@@ -30,6 +30,8 @@ class Container:
     login: users.Login
     resolve_actor: users.ResolveActor
     bootstrap_admin: users.BootstrapAdmin
+    get_setup_status: users.GetSetupStatus
+    complete_initial_setup: users.CompleteInitialSetup
     create_user: users.CreateUser
     update_user: users.UpdateUser
     change_own_password: users.ChangeOwnPassword
@@ -101,6 +103,8 @@ def build_container(
         login=users.Login(uow, hasher, tokens, InMemoryLoginThrottle(clock)),
         resolve_actor=users.ResolveActor(uow, tokens),
         bootstrap_admin=users.BootstrapAdmin(uow, hasher, clock),
+        get_setup_status=users.GetSetupStatus(uow),
+        complete_initial_setup=users.CompleteInitialSetup(uow, hasher, clock),
         create_user=users.CreateUser(uow, hasher, clock),
         update_user=users.UpdateUser(uow, hasher),
         change_own_password=users.ChangeOwnPassword(uow, hasher),

@@ -201,3 +201,53 @@ class ListUsers:
         actor.require(Permission.MANAGE_USERS)
         with self._uow(read_only=True) as uow:
             return uow.users.list_all()
+
+
+class GetSetupStatus:
+    """Indica si falta la configuración inicial (todavía no hay ningún usuario)."""
+
+    def __init__(self, uow: UnitOfWorkFactory) -> None:
+        self._uow = uow
+
+    def execute(self) -> bool:
+        with self._uow(read_only=True) as uow:
+            return uow.users.count() == 0
+
+
+@dataclass(frozen=True)
+class InitialSetupCommand:
+    business_name: str
+    username: str
+    full_name: str
+    password: str
+
+
+class CompleteInitialSetup:
+    """Asistente de la primera vez: nombre del negocio y primer administrador, juntos o nada.
+
+    Solo funciona mientras no exista ningún usuario; después, cualquier intento es un conflicto.
+    """
+
+    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, clock: Clock) -> None:
+        self._uow = uow
+        self._hasher = hasher
+        self._clock = clock
+
+    def execute(self, command: InitialSetupCommand) -> User:
+        validate_password(command.password)
+        password_hash = self._hasher.hash(command.password)
+        with self._uow() as uow:
+            if uow.users.count() > 0:
+                raise ConflictError("El sistema ya está configurado: inicie sesión")
+            settings = require_settings(uow).updated(business_name=command.business_name.strip())
+            user = User(
+                username=command.username,
+                full_name=command.full_name,
+                password_hash=password_hash,
+                role=Role.ADMIN,
+                created_at=self._clock.now(),
+            )
+            uow.settings.save(settings)
+            uow.users.add(user)
+            uow.commit()
+        return user

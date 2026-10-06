@@ -9,6 +9,7 @@ import { ReportsPage } from "./pages/Reports";
 import { SalesPage } from "./pages/Sales";
 import { SellPage } from "./pages/Sell";
 import { SettingsPage } from "./pages/Settings";
+import { SetupPage } from "./pages/Setup";
 import { ChangePasswordModal, UsersPage } from "./pages/Users";
 import { type Session, SessionContext } from "./session";
 import type { Me, Permission, Settings } from "./types";
@@ -50,6 +51,7 @@ export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
 
   const logout = useCallback(() => {
     setToken(null);
@@ -74,13 +76,25 @@ export function App() {
       .catch((error: Error) => setLoadError(error.message));
   }, [token]);
 
+  useEffect(() => {
+    if (token) return;
+    api
+      .get<{ needs_setup: boolean }>("/setup")
+      .then((status) => setNeedsSetup(status.needs_setup))
+      .catch(() => setNeedsSetup(false));
+  }, [token]);
+
+  const signIn = useCallback((newToken: string) => {
+    setToken(newToken);
+    setTokenState(newToken);
+  }, []);
+
+  if (!token && needsSetup === null) return <div className="empty">Cargando…</div>;
+  if (!token && needsSetup) return <SetupPage onDone={signIn} />;
   if (!token) {
     return (
       <LoginPage
-        onLogin={(newToken) => {
-          setToken(newToken);
-          setTokenState(newToken);
-        }}
+        onLogin={signIn}
       />
     );
   }

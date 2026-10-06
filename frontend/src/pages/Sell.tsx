@@ -14,6 +14,7 @@ import {
 } from "../cart";
 import { CustomerPicker } from "../components/CustomerPicker";
 import { OpenCash } from "../components/OpenCash";
+import { usePrinting } from "../components/Printing";
 import { Receipt } from "../components/Receipt";
 import { ConfirmDialog, ErrorAlert, Modal, useAction } from "../components/ui";
 import {
@@ -61,7 +62,8 @@ function Register() {
   const { settings, can } = useSession();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [checkout, setCheckout] = useState(false);
-  const [lastSale, setLastSale] = useState<{ sale: Sale; customer: Customer | null } | null>(null);
+  const [lastSale, setLastSale] = useState<{ sale: Sale; customer: Customer | null; printed: boolean } | null>(null);
+  const printing = usePrinting();
   const [confirmingClear, setConfirmingClear] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -168,7 +170,11 @@ function Register() {
           onDone={(sale, customer) => {
             setCheckout(false);
             setLines([]);
-            setLastSale({ sale, customer });
+            setLastSale({ sale, customer, printed: false });
+            if (printing.autoPrint) {
+              // Impresión automática: el tiquete sale mientras el cajero entrega las vueltas.
+              void printing.printSale(sale.id, false).then((ok) => ok && setLastSale((last) => last && { ...last, printed: true }));
+            }
           }}
         />
       )}
@@ -208,10 +214,18 @@ function Register() {
               Entregue de vueltas: <span className="change">{formatMoney(lastSale.sale.change)}</span>
             </div>
           )}
+          <ErrorAlert error={printing.error} />
           <Receipt sale={lastSale.sale} settings={settings} customerName={lastSale.customer?.name} />
           <div className="modal-actions">
-            <button className="btn" onClick={() => window.print()}>
-              Imprimir tiquete
+            <button
+              className="btn"
+              disabled={printing.busy}
+              onClick={async () => {
+                const ok = await printing.printSale(lastSale.sale.id, lastSale.printed);
+                if (ok) setLastSale((last) => last && { ...last, printed: true });
+              }}
+            >
+              {lastSale.printed && printing.direct ? "Imprimir otra copia" : "Imprimir tiquete"}
             </button>
             <button
               className="btn btn-primary"

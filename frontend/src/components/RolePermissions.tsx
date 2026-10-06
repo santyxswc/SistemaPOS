@@ -44,7 +44,8 @@ export function RolePermissionsCard() {
     });
 
   const changed = (info: RoleInfo) => {
-    const selected = draft[info.role] ?? new Set();
+    const selected = draft[info.role];
+    if (!selected) return false; // el borrador todavía no se ha cargado
     return selected.size !== info.permissions.length || info.permissions.some((p) => !selected.has(p));
   };
 

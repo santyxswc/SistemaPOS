@@ -101,6 +101,14 @@ class Body:
         except ValueError:
             raise self._invalid(key, "no es un identificador válido") from None
 
+    def object(self, key: str, *, required: bool = True) -> Body:
+        value = self._get(key, required)
+        if value is None:
+            return Body({}, prefix=f"{self._name(key)}.")
+        if not isinstance(value, dict):
+            raise self._invalid(key, "debe ser un objeto")
+        return Body(value, prefix=f"{self._name(key)}.")
+
     def strings(self, key: str, *, required: bool = True) -> list[str]:
         value = self._get(key, required)
         if value is None:

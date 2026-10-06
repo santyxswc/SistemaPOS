@@ -25,6 +25,7 @@ const SETTINGS: Settings = {
     { code: "nequi", name: "Nequi", kind: "electronic", active: true },
     { code: "fiado", name: "Fiado", kind: "credit", active: true },
   ],
+  printer: { kind: "browser", target: "", width: 48, auto_print: false, open_drawer: true },
 };
 
 const RICE: Product = {
@@ -62,7 +63,8 @@ function mockServer(handler: Handler) {
       calls.push(call);
       const result = handler(call);
       if (result === "network-error") throw new TypeError("Failed to fetch");
-      return new Response(JSON.stringify(result.body ?? {}), { status: result.status ?? 200 });
+      const status = result.status ?? 200;
+      return new Response(status === 204 ? null : JSON.stringify(result.body ?? {}), { status });
     }),
   );
   return calls;
@@ -475,5 +477,30 @@ describe("facturación electrónica", () => {
     expect(await screen.findByText("Venta #12: se intentará enviar de nuevo")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText(/Hay 1 documento electrónico/)).toBeNull());
     expect(calls.some((c) => c.method === "POST" && c.path === "/invoicing/documents/d-1/retry")).toBe(true);
+  });
+});
+
+describe("impresión directa", () => {
+  it("con impresión automática el tiquete sale solo y el botón imprime una copia", async () => {
+    const printer = { kind: "network", target: "192.168.1.50", width: 48, auto_print: true, open_drawer: true };
+    const base = cashierServer(() => ({ status: 201, body: SALE }));
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /settings") return { body: { ...SETTINGS, printer } };
+      if (route === "POST /sales/s-1/print") return { status: 204 };
+      return base(call);
+    });
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    const user = await loginAndOpenCash();
+    const dialog = await scanTwoRicesAndCheckout(user);
+    await user.click(within(dialog).getByRole("button", { name: "Exacto" }));
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar venta" }));
+
+    const receipt = await screen.findByRole("dialog", { name: "Venta #1 registrada" });
+    await user.click(await within(receipt).findByRole("button", { name: "Imprimir otra copia" }));
+
+    const prints = calls.filter((c) => c.path === "/sales/s-1/print").map((c) => c.body);
+    expect(prints).toEqual([{ copy: false }, { copy: true }]);
+    expect(print).not.toHaveBeenCalled(); // nunca aparece el cuadro del navegador
   });
 });

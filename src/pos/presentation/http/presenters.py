@@ -26,6 +26,7 @@ from ...domain.customers import Customer, LedgerEntry
 from ...domain.inventory import StockMovement
 from ...domain.invoicing import ElectronicDocument
 from ...domain.licensing import LicenseStatus
+from ...domain.printing import PrinterConfig
 from ...domain.sales import Sale
 from ...domain.settings import BusinessSettings
 from ...domain.shared.values import Money, format_quantity
@@ -100,6 +101,17 @@ def settings(value: BusinessSettings) -> Json:
             {"code": m.code, "name": m.name, "kind": m.kind.value, "active": m.active}
             for m in value.payment_methods
         ],
+        "printer": printer_config(value.printer),
+    }
+
+
+def printer_config(value: PrinterConfig) -> Json:
+    return {
+        "kind": value.kind.value,
+        "target": value.target,
+        "width": value.width,
+        "auto_print": value.auto_print,
+        "open_drawer": value.open_drawer,
     }
 
 

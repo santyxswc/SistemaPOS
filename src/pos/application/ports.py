@@ -22,6 +22,7 @@ from ..domain.inventory import StockMovement
 from ..domain.invoicing import DocumentStatus, ElectronicDocument, IssuedDocument
 from ..domain.licensing import License
 from ..domain.payments import PaymentKind
+from ..domain.printing import PrinterConfig
 from ..domain.sales import Sale
 from ..domain.settings import BusinessSettings
 from ..domain.shared.entity import AggregateRoot
@@ -29,6 +30,7 @@ from ..domain.shared.events import DomainEvent
 from ..domain.shared.values import Money
 from ..domain.suppliers import Purchase, Supplier, SupplierLedgerEntry
 from ..domain.users import RolePermissions, User
+from .receipts import ReceiptDocument
 
 # --- Servicios técnicos -------------------------------------------------------
 
@@ -106,6 +108,20 @@ class BackupService(Protocol):
 
     def check_folder(self, folder: str) -> None:
         """Lanza ValidationError si la carpeta no existe o no se puede escribir en ella."""
+        ...
+
+
+class ReceiptPrinter(Protocol):
+    """Impresora de tiquetes con impresión directa (sin el diálogo del navegador)."""
+
+    def print(self, config: PrinterConfig, document: ReceiptDocument, *, open_drawer: bool = False) -> None:
+        """Lanza BusinessRuleViolation con un mensaje claro si la impresora no responde."""
+        ...
+
+    def open_drawer(self, config: PrinterConfig) -> None: ...
+
+    def available_printers(self) -> list[str]:
+        """Impresoras instaladas en el equipo donde corre el sistema."""
         ...
 
 

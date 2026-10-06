@@ -27,11 +27,17 @@ async function loadCurrent(): Promise<CashReport | null> {
 }
 
 export function CashPage() {
-  const { can } = useSession();
+  const { can, settings } = useSession();
   const current = useLoad(loadCurrent, []);
   const [movement, setMovement] = useState<"deposit" | "withdrawal" | null>(null);
   const [closing, setClosing] = useState(false);
   const [closed, setClosed] = useState<CashReport | null>(null);
+  const drawer = useAction();
+
+  async function openDrawer() {
+    const done = await drawer.run(() => api.post("/cash-drawer/open"));
+    if (done !== undefined) toast("Cajón abierto");
+  }
 
   return (
     <>
@@ -39,6 +45,11 @@ export function CashPage() {
         <h1>Caja</h1>
         {current.data && (
           <div className="row">
+            {settings.printer.kind !== "browser" && (
+              <button className="btn" disabled={drawer.busy} onClick={openDrawer}>
+                Abrir cajón
+              </button>
+            )}
             <button className="btn" onClick={() => setMovement("deposit")}>
               Registrar ingreso
             </button>
@@ -51,7 +62,7 @@ export function CashPage() {
           </div>
         )}
       </div>
-      <ErrorAlert error={current.error} />
+      <ErrorAlert error={current.error ?? drawer.error} />
 
       {closed && (
         <div className="alert alert-info">

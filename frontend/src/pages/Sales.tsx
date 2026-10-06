@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { api } from "../api";
+import { usePrinting } from "../components/Printing";
 import { Receipt } from "../components/Receipt";
 import { Empty, ErrorAlert, Field, Modal, formatDateTime, toast, todayISO, useAction, useLoad } from "../components/ui";
 import { formatMoney, toCents } from "../money";
@@ -93,6 +94,7 @@ function SaleModal(props: { sale: Sale; onClose: () => void; onVoided: (sale: Sa
   const [voiding, setVoiding] = useState(false);
   const [reason, setReason] = useState("");
   const { busy, error, run } = useAction();
+  const printing = usePrinting();
   const { sale } = props;
 
   async function submit(event: FormEvent) {
@@ -111,6 +113,7 @@ function SaleModal(props: { sale: Sale; onClose: () => void; onVoided: (sale: Sa
           Anulada el {formatDateTime(sale.voided_at)}: {sale.void_reason}
         </div>
       )}
+      <ErrorAlert error={printing.error} />
       <Receipt sale={sale} settings={settings} />
       {voiding ? (
         <form onSubmit={submit} style={{ marginTop: 16 }}>
@@ -137,7 +140,7 @@ function SaleModal(props: { sale: Sale; onClose: () => void; onVoided: (sale: Sa
               Anular venta
             </button>
           )}
-          <button className="btn" onClick={() => window.print()}>
+          <button className="btn" disabled={printing.busy} onClick={() => printing.printSale(sale.id, true)}>
             Reimprimir
           </button>
           <button className="btn btn-primary" onClick={props.onClose}>

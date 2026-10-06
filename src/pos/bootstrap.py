@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .application.event_handlers import log_low_stock
-from .application.ports import Clock, InvoiceProvider, LicenseVerifier, UnitOfWorkFactory
+from .application.ports import Clock, InvoiceProvider, LicenseVerifier, ReceiptPrinter, UnitOfWorkFactory
 from .application.use_cases import (
     backups,
     cash,
@@ -20,6 +20,7 @@ from .application.use_cases import (
     inventory,
     invoicing,
     licensing,
+    printing,
     reports,
     sales,
     settings,
@@ -39,6 +40,7 @@ from .infrastructure.licensing import Ed25519LicenseVerifier
 from .infrastructure.persistence.sqlite.backup import SqliteBackupService
 from .infrastructure.persistence.sqlite.migrations import migrate
 from .infrastructure.persistence.sqlite.unit_of_work import SqliteUnitOfWork
+from .infrastructure.printing import EscPosReceiptPrinter
 from .infrastructure.security import InMemoryLoginThrottle, JwtTokenService, Pbkdf2PasswordHasher
 
 
@@ -121,6 +123,11 @@ class Container:
     get_invoicing_status: invoicing.GetInvoicingStatus
     list_electronic_documents: invoicing.ListElectronicDocuments
     retry_electronic_document: invoicing.RetryElectronicDocument
+    # impresión directa
+    print_sale_receipt: printing.PrintSaleReceipt
+    open_cash_drawer: printing.OpenCashDrawer
+    print_test_receipt: printing.PrintTestReceipt
+    list_printers: printing.ListPrinters
     # tareas que corren junto al servidor (las inicia la línea de comandos, no las pruebas)
     background_workers: tuple[PeriodicWorker, ...] = ()
 
@@ -131,6 +138,7 @@ def build_container(
     clock: Clock | None = None,
     invoice_provider: InvoiceProvider | None = None,
     license_verifier: LicenseVerifier | None = None,
+    receipt_printer: ReceiptPrinter | None = None,
 ) -> Container:
     clock = clock or SystemClock()
     # La clave pública va dentro del programa a propósito: no se lee de .env ni de la base de datos.
@@ -160,6 +168,7 @@ def build_container(
     run_backup = backups.RunBackup(uow, backup_service, clock)
     bus.subscribe(CashSessionClosed, backups.BackupOnCashClose(run_backup))
 
+    printer = receipt_printer or EscPosReceiptPrinter()
     sales_summary = reports.GetSalesSummary(uow)
     hasher = Pbkdf2PasswordHasher(config.password_iterations)
     tokens = JwtTokenService(config.secret_key, config.token_ttl_minutes, clock)
@@ -231,5 +240,9 @@ def build_container(
         get_invoicing_status=invoicing.GetInvoicingStatus(uow, provider),
         list_electronic_documents=invoicing.ListElectronicDocuments(uow),
         retry_electronic_document=invoicing.RetryElectronicDocument(uow, clock),
+        print_sale_receipt=printing.PrintSaleReceipt(uow, printer),
+        open_cash_drawer=printing.OpenCashDrawer(uow, printer),
+        print_test_receipt=printing.PrintTestReceipt(uow, printer, clock),
+        list_printers=printing.ListPrinters(printer),
         background_workers=tuple(workers),
     )

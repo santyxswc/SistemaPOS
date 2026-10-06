@@ -50,6 +50,16 @@ export interface PaymentMethod {
   active: boolean;
 }
 
+export type PrinterKind = "browser" | "windows" | "network";
+
+export interface PrinterConfig {
+  kind: PrinterKind;
+  target: string;
+  width: number;
+  auto_print: boolean;
+  open_drawer: boolean;
+}
+
 export interface Settings {
   business_name: string;
   tax_id: string;
@@ -64,6 +74,7 @@ export interface Settings {
   receipt_footer: string;
   backup_folder: string;
   payment_methods: PaymentMethod[];
+  printer: PrinterConfig;
 }
 
 export interface LicenseStatus {

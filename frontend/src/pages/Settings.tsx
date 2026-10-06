@@ -5,6 +5,7 @@ import { api } from "../api";
 import { BackupsCard } from "../components/Backups";
 import { InvoicingCard } from "../components/Invoicing";
 import { LicenseCard } from "../components/License";
+import { PrinterCard } from "../components/Printing";
 import { ErrorAlert, Field, toast, useAction } from "../components/ui";
 import { useSession } from "../session";
 import type { PaymentKind, PaymentMethod, Settings } from "../types";
@@ -154,6 +155,7 @@ export function SettingsPage() {
           </button>
         </section>
       </form>
+      <PrinterCard />
       <BackupsCard />
       <InvoicingCard />
       <LicenseCard />

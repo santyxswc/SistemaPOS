@@ -21,6 +21,7 @@ from ....domain.catalog import Category, Product, Unit
 from ....domain.customers import Customer, LedgerEntry, LedgerEntryType
 from ....domain.inventory import MovementType, StockMovement
 from ....domain.payments import PaymentKind, PaymentMethodConfig
+from ....domain.printing import PrinterConfig
 from ....domain.sales import Sale, SaleLine, SalePayment, SaleStatus, allocate_change
 from ....domain.settings import BusinessSettings
 from ....domain.shared.entity import AggregateRoot
@@ -99,6 +100,10 @@ class SqliteSettingsRepository:
             PaymentMethodConfig(code=m["code"], name=m["name"], kind=PaymentKind(m["kind"]), active=m["active"])
             for m in data["payment_methods"]
         )
+        if "printer" in data:
+            printer = data["printer"]
+            printer_fields = {f.name for f in dataclasses.fields(PrinterConfig)}
+            data["printer"] = PrinterConfig(**{k: v for k, v in printer.items() if k in printer_fields})
         return BusinessSettings(**data)
 
     def save(self, settings: BusinessSettings) -> None:
@@ -119,6 +124,13 @@ class SqliteSettingsRepository:
                 {"code": m.code, "name": m.name, "kind": m.kind.value, "active": m.active}
                 for m in settings.payment_methods
             ],
+            "printer": {
+                "kind": settings.printer.kind.value,
+                "target": settings.printer.target,
+                "width": settings.printer.width,
+                "auto_print": settings.printer.auto_print,
+                "open_drawer": settings.printer.open_drawer,
+            },
         }
         self._conn.execute(
             "INSERT INTO settings (key, value) VALUES (?, ?) "

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .payments import DEFAULT_PAYMENT_METHODS, PaymentMethodConfig
+from .printing import PrinterConfig
 from .shared.errors import ValidationError
 from .shared.values import TaxRate
 from .taxes import TaxExcludedPolicy, TaxIncludedPolicy, TaxPolicy
@@ -31,6 +32,7 @@ class BusinessSettings:
     receipt_footer: str = "¡Gracias por su compra!"
     backup_folder: str = ""  # copia adicional de los respaldos (USB, OneDrive); vacío = solo en este equipo
     payment_methods: tuple[PaymentMethodConfig, ...] = DEFAULT_PAYMENT_METHODS
+    printer: PrinterConfig = field(default_factory=PrinterConfig)
 
     def __post_init__(self) -> None:
         if not self.business_name.strip():

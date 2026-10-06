@@ -5,10 +5,10 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
-from ...domain.catalog import Product, required_text
+from ...domain.catalog import Product
 from ...domain.inventory import MovementType, StockMovement
 from ...domain.shared.errors import BusinessRuleViolation
-from ...domain.shared.values import Money
+from ...domain.shared.values import Money, required_text
 from ...domain.users import Permission
 from ..actor import Actor
 from ..common import get_or_404, page_size

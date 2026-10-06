@@ -7,11 +7,10 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from .catalog import required_text
 from .shared.entity import AggregateRoot, Entity
 from .shared.errors import BusinessRuleViolation, ValidationError
 from .shared.events import DomainEvent
-from .shared.values import Money
+from .shared.values import Money, required_text
 
 
 class CashSessionStatus(StrEnum):

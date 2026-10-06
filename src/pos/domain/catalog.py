@@ -12,7 +12,7 @@ from uuid import UUID
 from .shared.entity import AggregateRoot, Entity
 from .shared.errors import BusinessRuleViolation, InsufficientStock, ValidationError
 from .shared.events import DomainEvent
-from .shared.values import Money, TaxRate, format_quantity, parse_enum, to_quantity
+from .shared.values import Money, TaxRate, format_quantity, parse_enum, required_text, to_quantity
 
 
 class Unit(StrEnum):
@@ -32,13 +32,6 @@ class StockLow(DomainEvent):
     product_name: str
     stock: Decimal
     min_stock: Decimal
-
-
-def required_text(value: str | None, label: str) -> str:
-    cleaned = (value or "").strip()
-    if not cleaned:
-        raise ValidationError(f"El campo {label} es obligatorio")
-    return cleaned
 
 
 @dataclass(kw_only=True, eq=False)

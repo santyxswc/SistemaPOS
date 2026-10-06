@@ -16,6 +16,14 @@ _QUANTITY_STEP = Decimal("0.001")
 E = TypeVar("E", bound=Enum)
 
 
+def required_text(value: str | None, label: str) -> str:
+    """Texto obligatorio sin espacios sobrantes."""
+    cleaned = (value or "").strip()
+    if not cleaned:
+        raise ValidationError(f"El campo {label} es obligatorio")
+    return cleaned
+
+
 def to_decimal(value: object, field: str = "valor") -> Decimal:
     """Convierte texto, enteros o Decimal a Decimal.
 

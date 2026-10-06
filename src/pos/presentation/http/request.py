@@ -101,6 +101,14 @@ class Body:
         except ValueError:
             raise self._invalid(key, "no es un identificador válido") from None
 
+    def strings(self, key: str, *, required: bool = True) -> list[str]:
+        value = self._get(key, required)
+        if value is None:
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise self._invalid(key, "debe ser una lista de textos")
+        return value
+
     def items(self, key: str, *, required: bool = True) -> list[Body]:
         value = self._get(key, required)
         if value is None:

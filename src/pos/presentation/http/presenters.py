@@ -28,7 +28,17 @@ from ...domain.sales import Sale
 from ...domain.settings import BusinessSettings
 from ...domain.shared.values import Money, format_quantity
 from ...domain.suppliers import Purchase, Supplier, SupplierLedgerEntry
-from ...domain.users import User
+from ...domain.users import (
+    EDITABLE_ROLES,
+    GRANTABLE_PERMISSIONS,
+    PERMISSION_LABELS,
+    ROLE_LABELS,
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+    RolePermissions,
+    User,
+)
 
 Json = dict[str, Any]
 
@@ -408,5 +418,28 @@ def payables_summary(value: PayablesSummary) -> Json:
                 "next_due_date": row.next_due_date.isoformat() if row.next_due_date else None,
             }
             for row in value.suppliers
+        ],
+    }
+
+
+def role_permissions(value: RolePermissions) -> Json:
+    """Lo que puede hacer cada rol y la lista de permisos con su nombre para la pantalla."""
+    return {
+        "roles": [
+            {
+                "role": role.value,
+                "label": ROLE_LABELS[role],
+                "editable": role in EDITABLE_ROLES,
+                "customized": value.is_customized(role),
+                "permissions": sorted(p.value for p in value.for_role(role)),
+                "default_permissions": sorted(
+                    p.value for p in (frozenset(Permission) if role is Role.ADMIN else ROLE_PERMISSIONS[role])
+                ),
+            }
+            for role in Role
+        ],
+        "permissions": [
+            {"code": p.value, "label": PERMISSION_LABELS[p], "grantable": p in GRANTABLE_PERMISSIONS}
+            for p in Permission
         ],
     }

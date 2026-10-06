@@ -27,7 +27,7 @@ from ..domain.shared.entity import AggregateRoot
 from ..domain.shared.events import DomainEvent
 from ..domain.shared.values import Money
 from ..domain.suppliers import Purchase, Supplier, SupplierLedgerEntry
-from ..domain.users import User
+from ..domain.users import RolePermissions, User
 
 # --- Servicios técnicos -------------------------------------------------------
 
@@ -133,6 +133,14 @@ class LicenseRepository(Protocol):
     def get_installed_at(self) -> datetime | None: ...
 
     def save_installed_at(self, at: datetime) -> None: ...
+
+
+class RolePermissionsRepository(Protocol):
+    """Permisos de cada rol personalizados por el negocio."""
+
+    def get(self) -> RolePermissions: ...
+
+    def save(self, policy: RolePermissions) -> None: ...
 
 
 class SequenceRepository(Protocol):
@@ -392,6 +400,7 @@ class UnitOfWork(ABC):
 
     settings: SettingsRepository
     licensing: LicenseRepository
+    roles: RolePermissionsRepository
     sequences: SequenceRepository
     users: UserRepository
     categories: CategoryRepository

@@ -55,6 +55,8 @@ class Container:
     change_own_password: users.ChangeOwnPassword
     reset_password_from_console: users.ResetPasswordFromConsole
     list_users: users.ListUsers
+    get_role_permissions: users.GetRolePermissions
+    update_role_permissions: users.UpdateRolePermissions
     # licencia
     get_license_status: licensing.GetLicenseStatus
     install_license: licensing.InstallLicense
@@ -158,6 +160,8 @@ def build_container(
         change_own_password=users.ChangeOwnPassword(uow, hasher),
         reset_password_from_console=users.ResetPasswordFromConsole(uow, hasher, license_policy),
         list_users=users.ListUsers(uow),
+        get_role_permissions=users.GetRolePermissions(uow),
+        update_role_permissions=users.UpdateRolePermissions(uow),
         get_license_status=licensing.GetLicenseStatus(uow, license_policy),
         install_license=licensing.InstallLicense(uow, verifier, license_policy, clock),
         get_settings=settings.GetSettings(uow),

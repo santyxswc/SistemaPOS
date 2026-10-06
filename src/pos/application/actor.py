@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from ..domain.shared.errors import PermissionDenied
-from ..domain.users import PERMISSION_LABELS, Permission, Role, User
+from ..domain.users import DEFAULT_ROLE_PERMISSIONS, PERMISSION_LABELS, Permission, Role, RolePermissions, User
 
 
 @dataclass(frozen=True)
@@ -18,13 +18,13 @@ class Actor:
     permissions: frozenset[Permission]
 
     @classmethod
-    def from_user(cls, user: User) -> Actor:
+    def from_user(cls, user: User, policy: RolePermissions = DEFAULT_ROLE_PERMISSIONS) -> Actor:
         return cls(
             user_id=user.id,
             username=user.username,
             full_name=user.full_name,
             role=user.role,
-            permissions=user.permissions,
+            permissions=user.permissions(policy),
         )
 
     def can(self, permission: Permission) -> bool:

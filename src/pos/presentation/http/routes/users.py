@@ -6,7 +6,7 @@ from flask import Blueprint
 
 from ....application.use_cases.users import CreateUserCommand, UpdateUserCommand
 from ....domain.shared.values import parse_enum
-from ....domain.users import Role
+from ....domain.users import Permission, Role
 from .. import presenters
 from ..context import authenticated, container, current_actor
 from ..request import Body
@@ -46,3 +46,22 @@ def update_user(user_id: UUID):
         password=body.text("password", required=False),
     )
     return presenters.user(container().update_user.execute(current_actor(), user_id, command))
+
+
+@bp.get("/roles")
+@authenticated
+def get_roles():
+    return presenters.role_permissions(container().get_role_permissions.execute(current_actor()))
+
+
+@bp.put("/roles/<role>")
+@authenticated
+def update_role(role: str):
+    """Cuerpo: {"permissions": [...]} o {"reset": true} para volver a los permisos de fábrica."""
+    body = Body.from_request()
+    body.reject_unknown({"permissions", "reset"})
+    permissions = None
+    if not body.boolean("reset", default=False):
+        permissions = {parse_enum(Permission, code, "permiso") for code in body.strings("permissions")}
+    policy = container().update_role_permissions.execute(current_actor(), parse_enum(Role, role, "rol"), permissions)
+    return presenters.role_permissions(policy)

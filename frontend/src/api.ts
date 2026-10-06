@@ -112,6 +112,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
     request<T>("POST", path, { body: body ?? {}, headers }),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, { body }),
+  put: <T>(path: string, body: unknown) => request<T>("PUT", path, { body }),
   upload: <T>(path: string, file: File, query?: Query) => {
     const form = new FormData();
     form.append("file", file);

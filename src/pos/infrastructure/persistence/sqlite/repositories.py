@@ -25,7 +25,7 @@ from ....domain.sales import Sale, SaleLine, SalePayment, SaleStatus, allocate_c
 from ....domain.settings import BusinessSettings
 from ....domain.shared.entity import AggregateRoot
 from ....domain.shared.values import Money, TaxRate
-from ....domain.users import Role, User
+from ....domain.users import Permission, Role, RolePermissions, User
 
 Track = Callable[[AggregateRoot], None]
 _CHUNK = 500  # límite seguro de parámetros por consulta en SQLite
@@ -156,6 +156,36 @@ class SqliteLicenseRepository:
         self._conn.execute(
             "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
+        )
+
+
+class SqliteRolePermissionsRepository:
+    """Guarda en la tabla clave-valor solo los roles que el negocio personalizó."""
+
+    _KEY = "role_permissions"
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self) -> RolePermissions:
+        row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (self._KEY,)).fetchone()
+        if row is None:
+            return RolePermissions()
+        known_roles = {role.value for role in Role}
+        known_permissions = {permission.value for permission in Permission}
+        stored = json.loads(row["value"])
+        # Ignora permisos o roles que una versión futura haya retirado.
+        return RolePermissions({
+            Role(role): frozenset(Permission(p) for p in permissions if p in known_permissions)
+            for role, permissions in stored.items()
+            if role in known_roles
+        })
+
+    def save(self, policy: RolePermissions) -> None:
+        data = {role.value: sorted(p.value for p in permissions) for role, permissions in policy.granted.items()}
+        self._conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (self._KEY, json.dumps(data)),
         )
 
 

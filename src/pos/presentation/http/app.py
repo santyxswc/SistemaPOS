@@ -79,7 +79,7 @@ def _register_cors(app: Flask, origins: tuple[str, ...]) -> None:
         if origin and (origin in origins or "*" in origins):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, OPTIONS"
             response.headers["Access-Control-Max-Age"] = "600"
             response.vary.add("Origin")
         return response

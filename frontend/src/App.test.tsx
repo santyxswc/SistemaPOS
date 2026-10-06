@@ -383,3 +383,52 @@ describe("proveedores", () => {
     });
   });
 });
+
+describe("permisos por rol", () => {
+  const ADMIN: Me = {
+    id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+    permissions: ["manage_settings", "manage_users", "sell", "operate_cash"],
+  };
+  const ROLES = {
+    roles: [
+      { role: "admin", label: "Administrador", editable: false, customized: false, permissions: [], default_permissions: [] },
+      { role: "cashier", label: "Cajero", editable: true, customized: false, permissions: ["sell", "operate_cash"],
+        default_permissions: ["sell", "operate_cash"] },
+    ],
+    permissions: [
+      { code: "manage_users", label: "administrar usuarios", grantable: false },
+      { code: "sell", label: "vender", grantable: true },
+      { code: "operate_cash", label: "operar la caja", grantable: true },
+      { code: "view_reports", label: "ver reportes", grantable: true },
+    ],
+  };
+
+  it("deja que el cajero vea reportes", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    window.location.hash = "/usuarios";
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /auth/me") return { body: ADMIN };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /license") return { body: { needs_attention: false, max_users: null } };
+      if (route === "GET /users") return { body: { items: [] } };
+      if (route === "GET /roles") return { body: ROLES };
+      if (route === "PUT /roles/cashier") return { body: ROLES };
+      return { status: 404, body: { error: { code: "not_found", message: "no simulado" } } };
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const card = await screen.findByRole("region", { name: "Permisos por rol" });
+    expect(within(card).queryByText("Administrar usuarios")).toBeNull(); // reservado al administrador
+    const save = within(card).getByRole("button", { name: "Guardar" });
+    expect(save).toHaveProperty("disabled", true);
+    await user.click(within(card).getByLabelText("Cajero: ver reportes"));
+    await user.click(save);
+
+    await screen.findByText("Permisos de Cajero guardados");
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.path).toBe("/roles/cashier");
+    expect((put.body as { permissions: string[] }).permissions.sort()).toEqual(["operate_cash", "sell", "view_reports"]);
+  });
+});

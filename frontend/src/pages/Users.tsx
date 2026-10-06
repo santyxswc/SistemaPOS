@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { api } from "../api";
+import { RolePermissionsCard } from "../components/RolePermissions";
 import { Empty, ErrorAlert, Field, Modal, formatDateTime, toUsername, toast, useAction, useLoad } from "../components/ui";
 import { useSession } from "../session";
 import { type Items, type LicenseStatus, ROLE_LABEL, type Role, type User } from "../types";
@@ -65,6 +66,7 @@ export function UsersPage() {
           </table>
         )}
       </section>
+      <RolePermissionsCard />
       {editing && (
         <UserForm
           user={editing === "new" ? null : editing}

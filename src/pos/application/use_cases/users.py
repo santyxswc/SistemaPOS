@@ -6,7 +6,17 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from ...domain.shared.errors import AuthenticationError, BusinessRuleViolation, ConflictError, NotFoundError
-from ...domain.users import Permission, Role, User, normalize_username, validate_password
+from ...domain.users import (
+    EDITABLE_ROLES,
+    ROLE_LABELS,
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+    RolePermissions,
+    User,
+    normalize_username,
+    validate_password,
+)
 from ..actor import Actor
 from ..common import get_or_404, require_settings
 from ..ports import Clock, LoginThrottle, PasswordHasher, TokenService, UnitOfWorkFactory
@@ -65,9 +75,10 @@ class ResolveActor:
         user_id = self._tokens.decode(token)
         with self._uow(read_only=True) as uow:
             user = uow.users.get(user_id)
+            policy = uow.roles.get()
         if user is None or not user.active:
             raise AuthenticationError("Sesión no válida: inicie sesión de nuevo")
-        return Actor.from_user(user)
+        return Actor.from_user(user, policy)
 
 
 class BootstrapAdmin:
@@ -277,3 +288,31 @@ class CompleteInitialSetup:
             uow.users.add(user)
             uow.commit()
         return user
+
+
+class GetRolePermissions:
+    def __init__(self, uow: UnitOfWorkFactory) -> None:
+        self._uow = uow
+
+    def execute(self, actor: Actor) -> RolePermissions:
+        actor.require(Permission.MANAGE_USERS)
+        with self._uow(read_only=True) as uow:
+            return uow.roles.get()
+
+
+class UpdateRolePermissions:
+    """Cambia lo que puede hacer un rol. Rige desde la siguiente acción de cada usuario."""
+
+    def __init__(self, uow: UnitOfWorkFactory) -> None:
+        self._uow = uow
+
+    def execute(self, actor: Actor, role: Role, permissions: set[Permission] | None) -> RolePermissions:
+        """Con `permissions=None` el rol vuelve a los permisos de fábrica."""
+        actor.require(Permission.MANAGE_USERS)
+        if role not in EDITABLE_ROLES:
+            raise BusinessRuleViolation(f"Los permisos del rol {ROLE_LABELS[role]} no se pueden cambiar")
+        with self._uow() as uow:
+            policy = uow.roles.get().with_role(role, ROLE_PERMISSIONS[role] if permissions is None else permissions)
+            uow.roles.save(policy)
+            uow.commit()
+        return policy

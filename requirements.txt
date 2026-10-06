@@ -3,3 +3,5 @@ PyJWT>=2.7,<3
 waitress>=3.0,<4
 tzdata>=2024.1  # zonas horarias en Windows
 cryptography>=42  # firma de licencias (Ed25519)
+pystray>=0.19; sys_platform == "win32"  # ícono junto al reloj de Windows
+Pillow>=10; sys_platform == "win32"  # dibujo del ícono

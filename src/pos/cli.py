@@ -1,4 +1,8 @@
-"""Comandos del POS. Son los mismos para `python manage.py ...` y para `PuntoDeVenta.exe ...`.
+"""Comandos del POS. Son los mismos para `python manage.py ...` y para los ejecutables.
+
+`PuntoDeVenta.exe` no abre ventana negra: muestra un ícono junto al reloj de Windows.
+`PuntoDeVentaConsola.exe` es el mismo programa con consola, para los comandos de soporte
+(`reset-password`, `license`...), que necesitan mostrar texto y pedir datos.
 
     start            (por defecto) inicia el sistema y abre el navegador; la primera vez lo prepara solo
     init             instalación desde la consola: configuración, base de datos y administrador
@@ -32,6 +36,19 @@ from .infrastructure.persistence.sqlite.backup import backup_database
 from .paths import data_root, is_frozen, resource_root
 
 logger = logging.getLogger("pos")
+
+CONSOLE_EXECUTABLE = "PuntoDeVentaConsola"
+
+
+def _is_windowed() -> bool:
+    """¿Corre el ejecutable sin consola? Abierto desde Windows no tiene stdout; abierto desde
+    otra consola hereda la de ella, así que también se decide por el nombre del ejecutable."""
+    if sys.stdout is None or sys.stderr is None:
+        return True
+    return is_frozen() and Path(sys.executable).stem.lower() != CONSOLE_EXECUTABLE.lower()
+
+
+WINDOWED = _is_windowed()
 
 _FALLBACK_ENV = (
     "POS_ENV=production\nPOS_SECRET_KEY=\nPOS_DATABASE_PATH=data/pos.sqlite3\nPOS_HOST=127.0.0.1\nPOS_PORT=8000\n"
@@ -75,6 +92,80 @@ def _log_to_file(folder: Path) -> Path:
     return log_file
 
 
+def _show_message(message: str, *, error: bool = False) -> None:
+    """Sin consola, el mensaje se muestra en una ventana; con consola, en el texto."""
+    if WINDOWED and sys.platform == "win32":
+        import ctypes
+
+        icon = 0x10 if error else 0x40  # ícono de error o de información
+        ctypes.windll.user32.MessageBoxW(None, message, "Punto de venta", icon)
+    else:
+        print(message, file=sys.stderr if error else sys.stdout)
+
+
+def _show_error(message: str) -> None:
+    _show_message(message, error=True)
+
+
+def _port_busy_message(port: int) -> str:
+    return f"El puerto {port} está ocupado por otro programa. Cambie POS_PORT en {data_root() / '.env'}"
+
+
+def _open_folder(folder: Path) -> None:
+    if sys.platform == "win32":
+        os.startfile(folder)  # type: ignore[attr-defined]
+    else:
+        webbrowser.open(folder.as_uri())
+
+
+def _serve_with_tray(container: Container, config: AppConfig, url: str, *, open_browser: bool) -> None:
+    """Servidor en segundo plano e ícono junto al reloj en primer plano, hasta que el usuario lo apaga."""
+    from waitress import create_server
+
+    from .presentation.desktop.tray import TrayActions, TrayIcon
+    from .presentation.http.app import create_app
+
+    try:
+        server = create_server(create_app(container), host=config.host, port=config.port, threads=8)
+    except OSError as error:
+        logger.error("No se pudo usar el puerto %s: %s", config.port, error)
+        _show_error(_port_busy_message(config.port))
+        sys.exit(1)
+    for worker in container.background_workers:
+        worker.start()
+    threading.Thread(target=server.run, name="servidor", daemon=True).start()
+    logger.info("Punto de venta %s escuchando en %s (ícono junto al reloj)", __version__, url)
+
+    def backup_now() -> str:
+        result = container.run_backup.execute_unattended()
+        message = f"Respaldo creado: {result.file.name}"
+        if result.extra_error:
+            message += f". Aviso: {result.extra_error}"
+        return message
+
+    def update_message() -> str | None:
+        status = container.check_for_updates.status()
+        if status.available and status.latest is not None:
+            return f"Hay una versión nueva del punto de venta: {status.latest.version}. Ábralo para descargarla."
+        return None
+
+    def shutdown() -> None:
+        logger.info("Apagado desde el ícono junto al reloj")
+        for worker in container.background_workers:
+            worker.stop()
+        server.close()
+
+    actions = TrayActions(
+        open_app=lambda: webbrowser.open(url),
+        backup_now=backup_now,
+        open_data_folder=lambda: _open_folder(data_root()),
+        quit=shutdown,
+        update_message=update_message,
+    )
+    tray = TrayIcon(f"Punto de venta {__version__}\n{url}", actions)
+    tray.run(on_ready=(lambda: webbrowser.open(url)) if open_browser else None)
+
+
 def _serve(container: Container, host: str, port: int) -> None:
     from waitress import serve
 
@@ -86,7 +177,7 @@ def _serve(container: Container, host: str, port: int) -> None:
         serve(create_app(container), host=host, port=port, threads=8)
     except OSError as error:
         logger.error("No se pudo usar el puerto %s: %s", port, error)
-        sys.exit(f"El puerto {port} está ocupado por otro programa. Cambie POS_PORT en {data_root() / '.env'}")
+        sys.exit(_port_busy_message(port))
     finally:
         for worker in container.background_workers:
             worker.stop()
@@ -121,6 +212,10 @@ def start(args: argparse.Namespace) -> None:
         return
 
     container = build_container(config)
+    use_tray = WINDOWED if args.tray is None else args.tray
+    if use_tray:
+        _serve_with_tray(container, config, url, open_browser=not args.no_browser)
+        return
     print(f"Punto de venta {__version__}")
     print(f"  Dirección:  {url}")
     print(f"  Datos:      {folder}")
@@ -220,11 +315,16 @@ def backup(args: argparse.Namespace) -> None:
         return
     _log_to_file(data_root())  # la tarea programada no tiene consola: el registro dice si funcionó
     result = build_container(config).run_backup.execute_unattended()
-    print(f"Respaldo creado: {result.file.name}")
+    lines = [f"Respaldo creado: {result.file.name}"]
     if result.extra_copy:
-        print(f"Copia adicional: {result.extra_copy}")
+        lines.append(f"Copia adicional: {result.extra_copy}")
     if result.extra_error:
-        print(f"Aviso: {result.extra_error}")
+        lines.append(f"Aviso: {result.extra_error}")
+    message = "\n".join(lines)
+    if args.notify:  # acceso directo del menú Inicio: sin consola, el resultado se ve en una ventana
+        _show_message(message)
+    else:
+        print(message)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -234,6 +334,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     launch = commands.add_parser("start", help="Inicia el sistema y abre el navegador (por defecto)")
     launch.add_argument("--no-browser", action="store_true", help="No abrir el navegador")
+    window = launch.add_mutually_exclusive_group()
+    window.add_argument("--tray", dest="tray", action="store_true", default=None,
+                        help="Ícono junto al reloj en lugar de la consola (por defecto en PuntoDeVenta.exe)")
+    window.add_argument("--console", dest="tray", action="store_false", help="Mostrar la consola")
     launch.set_defaults(handler=start)
 
     setup = commands.add_parser("init", help="Instalación desde la consola")
@@ -265,11 +369,22 @@ def build_parser() -> argparse.ArgumentParser:
     copy.add_argument("--dir", help="Carpeta destino para una copia puntual (por defecto data/backups y la carpeta "
                       "adicional de Ajustes)")
     copy.add_argument("--keep", type=int, default=30, help="Con --dir: cuántos respaldos conservar (por defecto 30)")
+    copy.add_argument("--avisar", dest="notify", action="store_true",
+                      help="Muestra el resultado en una ventana (para el acceso directo, sin consola)")
     copy.set_defaults(handler=backup)
     return parser
 
 
+def _ensure_streams() -> None:
+    """Sin consola no hay dónde escribir: los print van a ninguna parte y el registro al archivo."""
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115 - vive lo que vive el proceso
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
+
 def main(argv: list[str] | None = None) -> None:
+    _ensure_streams()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -278,11 +393,17 @@ def main(argv: list[str] | None = None) -> None:
     try:
         args.handler(args)
     except DomainError as error:
+        if WINDOWED:
+            _show_error(error.message)
         sys.exit(f"Error: {error.message}")
     except Exception:
         if not is_frozen():
             raise
-        # Empaquetado, la ventana se cerraría sin dejar ver el error.
         logger.exception("Error al iniciar el punto de venta")
-        input("\nOcurrió un error al iniciar. Revise el registro y presione Enter para cerrar...")
+        log = data_root() / "logs" / "pos.log"
+        if WINDOWED:
+            _show_error(f"Ocurrió un error al iniciar el punto de venta.\n\nEnvíe a soporte el archivo:\n{log}")
+        else:
+            # Empaquetado con consola, la ventana se cerraría sin dejar ver el error.
+            input(f"\nOcurrió un error al iniciar. Revise {log} y presione Enter para cerrar...")
         sys.exit(1)

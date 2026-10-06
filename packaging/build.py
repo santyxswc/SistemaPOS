@@ -4,7 +4,8 @@
     python packaging/build.py --skip-frontend usa la interfaz ya compilada
 
 Resultado en dist/:
-    PuntoDeVenta/                       carpeta lista para copiar
+    PuntoDeVenta/                       carpeta lista para copiar (PuntoDeVenta.exe sin consola,
+                                        PuntoDeVentaConsola.exe para soporte)
     PuntoDeVenta-<versión>-windows.zip  la misma carpeta comprimida
     PuntoDeVenta-<versión>-setup.exe    instalador, si Inno Setup (iscc) está instalado
 
@@ -31,6 +32,8 @@ DIST = ROOT / "dist"
 BUILD = ROOT / "build"
 APP_DIR = DIST / "PuntoDeVenta"
 EXE = APP_DIR / "PuntoDeVenta.exe"
+CONSOLE_EXE = APP_DIR / "PuntoDeVentaConsola.exe"
+ICON = BUILD / "icono.ico"
 STATIC_INDEX = ROOT / "src" / "pos" / "presentation" / "web" / "static" / "index.html"
 
 
@@ -86,9 +89,17 @@ def write_version_info(number: str) -> None:
     )
 
 
+def write_icon() -> None:
+    sys.path.insert(0, str(ROOT / "src"))
+    from pos.presentation.desktop.icon import write_ico
+
+    write_ico(ICON)
+
+
 def build_executable(number: str) -> None:
     step("Empaquetando con PyInstaller")
     write_version_info(number)
+    write_icon()
     run([
         sys.executable, "-m", "PyInstaller", str(ROOT / "packaging" / "PuntoDeVenta.spec"),
         "--noconfirm", "--clean", "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller"),
@@ -107,9 +118,15 @@ def get_json(url: str) -> dict:
 
 
 def smoke_test(number: str) -> None:
-    """Arranca el .exe en una carpeta de datos temporal, como lo haría un cliente nuevo."""
+    """Arranca el programa en una carpeta de datos temporal, como lo haría un cliente nuevo.
+
+    Se prueba con el ejecutable de consola (el mismo código) porque el del cliente no tiene
+    salida de texto que leer.
+    """
     step("Probando el ejecutable")
-    output = subprocess.run([str(EXE), "--version"], capture_output=True, text=True, timeout=60)
+    if not EXE.is_file():
+        sys.exit(f"Falta {EXE.name}")
+    output = subprocess.run([str(CONSOLE_EXE), "--version"], capture_output=True, text=True, timeout=60)
     if output.stdout.strip() != number:
         sys.exit(f"--version devolvió {output.stdout!r} {output.stderr!r}")
 
@@ -119,7 +136,8 @@ def smoke_test(number: str) -> None:
         env = {**os.environ, "POS_HOME": home, "POS_PORT": str(port)}
         env.pop("POS_SECRET_KEY", None)
         process = subprocess.Popen(
-            [str(EXE), "start", "--no-browser"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            [str(CONSOLE_EXE), "start", "--no-browser", "--console"],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         try:
             deadline = time.monotonic() + 60

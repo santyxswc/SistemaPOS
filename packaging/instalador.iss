@@ -25,6 +25,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\PuntoDeVenta.exe
+SetupIconFile=..\build\icono.ico
 UninstallDisplayName=Punto de Venta
 CloseApplications=yes
 MinVersion=10.0
@@ -42,10 +43,10 @@ Source: "..\dist\PuntoDeVenta\*"; DestDir: "{app}"; Flags: ignoreversion recurse
 
 [Icons]
 Name: "{autoprograms}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"
-Name: "{autoprograms}\Copia de seguridad del Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Parameters: "backup"
+Name: "{autoprograms}\Copia de seguridad del Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Parameters: "backup --avisar"
 Name: "{autodesktop}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Tasks: desktopicon
-; Al iniciar sesión en Windows el sistema queda listo; el acceso directo del escritorio solo abre el navegador.
-Name: "{userstartup}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Parameters: "start --no-browser"; WorkingDir: "{app}"; Flags: runminimized; Tasks: autostart
+; Al iniciar sesión en Windows el sistema queda listo junto al reloj; el acceso directo del escritorio solo abre el navegador.
+Name: "{userstartup}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Parameters: "start --no-browser"; WorkingDir: "{app}"; Tasks: autostart
 
 [Run]
 Filename: "schtasks.exe"; Parameters: "/create /f /tn ""PuntoDeVenta respaldo"" /sc daily /st 22:00 /tr ""\""{app}\PuntoDeVenta.exe\"" backup"""; Flags: runhidden; Tasks: dailybackup

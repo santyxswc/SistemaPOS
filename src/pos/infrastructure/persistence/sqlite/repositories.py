@@ -615,8 +615,8 @@ class SqliteSaleRepository:
     def add(self, sale: Sale) -> None:
         self._conn.execute(
             "INSERT INTO sales (id, number, status, cashier_id, cash_session_id, customer_id, subtotal, tax_total, "
-            "discount_total, total, change_amount, note, created_at, voided_at, voided_by, void_reason) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "discount_total, total, change_amount, note, created_at, voided_at, voided_by, void_reason, "
+            "request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(sale.id),
                 sale.number,
@@ -634,6 +634,7 @@ class SqliteSaleRepository:
                 _ts(sale.voided_at),
                 _str(sale.voided_by),
                 sale.void_reason,
+                sale.request_id,
             ),
         )
         self._conn.executemany(
@@ -666,6 +667,10 @@ class SqliteSaleRepository:
 
     def get(self, sale_id: UUID) -> Sale | None:
         rows = self._conn.execute("SELECT * FROM sales WHERE id = ?", (str(sale_id),)).fetchall()
+        return next(iter(self._hydrate(rows)), None)
+
+    def get_by_request_id(self, request_id: str) -> Sale | None:
+        rows = self._conn.execute("SELECT * FROM sales WHERE request_id = ?", (request_id,)).fetchall()
         return next(iter(self._hydrate(rows)), None)
 
     def find(
@@ -753,6 +758,7 @@ class SqliteSaleRepository:
                 voided_at=_dt(row["voided_at"]),
                 voided_by=_uuid(row["voided_by"]),
                 void_reason=row["void_reason"],
+                request_id=row["request_id"],
             )
             for row in rows
         ]

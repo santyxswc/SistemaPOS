@@ -171,6 +171,11 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX ix_customer_ledger_customer ON customer_ledger(customer_id, created_at);
     """,
+    # 2: clave de idempotencia para que un reintento del cajero no duplique la venta
+    """
+    ALTER TABLE sales ADD COLUMN request_id TEXT;
+    CREATE UNIQUE INDEX ux_sales_request_id ON sales(request_id) WHERE request_id IS NOT NULL;
+    """,
 ]
 
 

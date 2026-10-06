@@ -110,6 +110,7 @@ class Sale(AggregateRoot):
     change: Money
     created_at: datetime
     customer_id: UUID | None = None
+    request_id: str | None = None  # clave de idempotencia enviada por la caja
     status: SaleStatus = SaleStatus.COMPLETED
     note: str = ""
     voided_at: datetime | None = None
@@ -128,6 +129,7 @@ class Sale(AggregateRoot):
         at: datetime,
         customer_id: UUID | None = None,
         note: str = "",
+        request_id: str | None = None,
     ) -> Sale:
         if not lines:
             raise ValidationError("La venta debe tener al menos un producto")
@@ -164,6 +166,7 @@ class Sale(AggregateRoot):
             change=change,
             created_at=at,
             note=(note or "").strip(),
+            request_id=request_id,
         )
         sale.record(
             SaleCompleted(occurred_at=at, sale_id=sale.id, number=number, total=total, customer_id=customer_id)

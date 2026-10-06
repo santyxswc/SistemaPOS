@@ -17,7 +17,7 @@ from ...domain.inventory import MovementType, StockMovement
 from ...domain.payments import PaymentKind
 from ...domain.sales import Sale, SaleLine, SalePayment
 from ...domain.settings import BusinessSettings
-from ...domain.shared.errors import BusinessRuleViolation, NotFoundError, ValidationError
+from ...domain.shared.errors import BusinessRuleViolation, ConflictError, NotFoundError, ValidationError
 from ...domain.shared.values import Money
 from ...domain.users import Permission
 from ..actor import Actor
@@ -45,6 +45,29 @@ class CreateSaleCommand:
     payments: Sequence[PaymentInput]
     customer_id: UUID | None = None
     note: str = ""
+    request_id: str | None = None  # misma clave = misma venta (reintentos seguros)
+
+
+MAX_REQUEST_ID_LENGTH = 64
+
+
+def _clean_request_id(request_id: str | None) -> str | None:
+    if request_id is None:
+        return None
+    cleaned = request_id.strip()
+    if not cleaned or len(cleaned) > MAX_REQUEST_ID_LENGTH:
+        raise ValidationError(f"La clave de idempotencia debe tener entre 1 y {MAX_REQUEST_ID_LENGTH} caracteres")
+    return cleaned
+
+
+def _previous_attempt(uow: UnitOfWork, actor: Actor, request_id: str | None) -> Sale | None:
+    """Si la caja reintenta una venta que ya quedó registrada, devuelve esa misma venta."""
+    if request_id is None:
+        return None
+    sale = uow.sales.get_by_request_id(request_id)
+    if sale is not None and sale.cashier_id != actor.user_id:
+        raise ConflictError("La clave de idempotencia ya fue usada por otro usuario")
+    return sale
 
 
 def _resolve_payment(settings: BusinessSettings, payment: PaymentInput) -> SalePayment:
@@ -61,6 +84,8 @@ def _load_customer(uow: UnitOfWork, customer_id: UUID | None) -> Customer | None
 
 
 class CreateSale:
+    """Registra una venta. Con request_id, repetir la petición no duplica la venta."""
+
     def __init__(self, uow: UnitOfWorkFactory, clock: Clock) -> None:
         self._uow = uow
         self._clock = clock
@@ -69,9 +94,13 @@ class CreateSale:
         actor.require(Permission.SELL)
         if not command.items:
             raise ValidationError("La venta debe tener al menos un producto")
+        request_id = _clean_request_id(command.request_id)
         now = self._clock.now()
 
         with self._uow() as uow:
+            previous = _previous_attempt(uow, actor, request_id)
+            if previous is not None:
+                return previous
             settings = require_settings(uow)
             session = require_open_session(uow, actor)
             customer = _load_customer(uow, command.customer_id)
@@ -109,6 +138,7 @@ class CreateSale:
                 payments=[_resolve_payment(settings, payment) for payment in command.payments],
                 at=now,
                 note=command.note,
+                request_id=request_id,
             )
             uow.sales.add(sale)
 

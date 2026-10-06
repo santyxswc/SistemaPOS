@@ -165,6 +165,8 @@ class SaleRepository(Protocol):
 
     def get(self, sale_id: UUID) -> Sale | None: ...
 
+    def get_by_request_id(self, request_id: str) -> Sale | None: ...
+
     def find(
         self,
         *,

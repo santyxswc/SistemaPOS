@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from pos.application.use_cases.customers import CreateCustomerCommand, RegisterCustomerPayment  # noqa: F401
-from pos.application.use_cases.sales import ListSalesQuery
+from pos.application.use_cases.sales import CreateSaleCommand, ListSalesQuery, PaymentInput, SaleItemInput
 from pos.application.use_cases.users import CreateUserCommand, UpdateUserCommand
 from pos.domain.payments import DEFAULT_PAYMENT_METHODS, PaymentKind, PaymentMethodConfig
 from pos.domain.shared.errors import (
@@ -37,6 +37,34 @@ class SalesFlowTests(PosTestCase):
         self.assertEqual(self.stock_of(self.rice), Decimal("6"))
         report = self.c.get_current_cash_session.execute(self.cashier)
         self.assertEqual(report.session.expected_cash, Money.of("57500"))  # Nequi no entra al cajón
+
+    def test_retrying_a_sale_with_the_same_request_id_does_not_duplicate_it(self):
+        self.open_cash(self.cashier, "50000")
+        command = CreateSaleCommand(
+            items=[SaleItemInput(product_id=self.rice.id, quantity=Decimal("2"))],
+            payments=[PaymentInput(method="efectivo", amount=Money.of("5000"))],
+            request_id="caja1-0001",
+        )
+        first = self.c.create_sale.execute(self.cashier, command)
+        retry = self.c.create_sale.execute(self.cashier, command)
+
+        self.assertEqual(retry.id, first.id)
+        self.assertEqual(self.stock_of(self.rice), Decimal("8"))
+        report = self.c.get_current_cash_session.execute(self.cashier)
+        self.assertEqual((report.sales_count, report.session.expected_cash), (1, Money.of("55000")))
+
+    def test_request_id_from_another_cashier_is_rejected(self):
+        other = self.make_cashier("caja2")
+        for cashier in (self.cashier, other):
+            self.open_cash(cashier)
+        command = CreateSaleCommand(
+            items=[SaleItemInput(product_id=self.rice.id, quantity=Decimal("1"))],
+            payments=[PaymentInput(method="efectivo", amount=Money.of("2500"))],
+            request_id="repetida",
+        )
+        self.c.create_sale.execute(self.cashier, command)
+        with self.assertRaises(ConflictError):
+            self.c.create_sale.execute(other, command)
 
     def test_cannot_sell_without_open_cash(self):
         with self.assertRaisesRegex(BusinessRuleViolation, "abra la caja"):

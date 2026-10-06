@@ -22,6 +22,22 @@ class HttpApiTests(PosTestCase):
         headers = {"Authorization": f"Bearer {token or self.token}"}
         return self.client.open(url, method=method, headers=headers, **kwargs)
 
+    def test_idempotency_key_makes_sale_retries_safe(self):
+        product_id = self.api("POST", "/api/v1/products", json={
+            "sku": "PAN", "name": "Pan", "price": "500", "initial_stock": "10",
+        }).get_json()["id"]
+        self.api("POST", "/api/v1/cash-sessions", json={"opening_amount": "0"})
+        payload = {"items": [{"product_id": product_id, "quantity": 1}],
+                   "payments": [{"method": "efectivo", "amount": "500"}]}
+        headers = {"Authorization": f"Bearer {self.token}", "Idempotency-Key": "venta-123"}
+
+        first = self.client.post("/api/v1/sales", json=payload, headers=headers)
+        retry = self.client.post("/api/v1/sales", json=payload, headers=headers)
+
+        self.assertEqual((first.status_code, retry.status_code), (201, 201))
+        self.assertEqual(first.get_json()["id"], retry.get_json()["id"])
+        self.assertEqual(self.api("GET", f"/api/v1/products/{product_id}").get_json()["stock"], "9")
+
     def test_health(self):
         self.assertEqual(self.client.get("/health").get_json()["status"], "ok")
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from flask import Blueprint
+from flask import Blueprint, request
 
 from ....application.use_cases.sales import CreateSaleCommand, ListSalesQuery, PaymentInput, SaleItemInput
 from .. import presenters
@@ -31,6 +31,7 @@ def create_sale():
         ],
         customer_id=body.uuid("customer_id", required=False),
         note=body.text("note", required=False, default=""),
+        request_id=request.headers.get("Idempotency-Key"),
     )
     return presenters.sale(container().create_sale.execute(current_actor(), command)), 201
 

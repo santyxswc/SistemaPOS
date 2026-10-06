@@ -125,6 +125,23 @@ class ReceiptPrinter(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class ReleaseInfo:
+    version: str  # "0.4.0"
+    url: str  # página de la versión con sus notas
+    download_url: str | None = None  # instalador setup.exe, si está publicado
+    published_at: datetime | None = None
+    notes: str = ""
+
+
+class ReleaseSource(Protocol):
+    """Dónde se publican las versiones nuevas del programa."""
+
+    def latest(self) -> ReleaseInfo | None:
+        """None si no se pudo saber (sin internet, sin versiones publicadas)."""
+        ...
+
+
 class InvoiceProvider(Protocol):
     """Proveedor tecnológico autorizado por la DIAN que emite los documentos electrónicos.
 

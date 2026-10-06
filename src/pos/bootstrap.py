@@ -9,8 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import __version__
 from .application.event_handlers import log_low_stock
-from .application.ports import Clock, InvoiceProvider, LicenseVerifier, ReceiptPrinter, UnitOfWorkFactory
+from .application.ports import (
+    Clock,
+    InvoiceProvider,
+    LicenseVerifier,
+    ReceiptPrinter,
+    ReleaseSource,
+    UnitOfWorkFactory,
+)
 from .application.use_cases import (
     backups,
     cash,
@@ -25,6 +33,7 @@ from .application.use_cases import (
     sales,
     settings,
     suppliers,
+    updates,
     users,
 )
 from .config import AppConfig
@@ -41,6 +50,7 @@ from .infrastructure.persistence.sqlite.backup import SqliteBackupService
 from .infrastructure.persistence.sqlite.migrations import migrate
 from .infrastructure.persistence.sqlite.unit_of_work import SqliteUnitOfWork
 from .infrastructure.printing import EscPosReceiptPrinter
+from .infrastructure.releases import GitHubReleaseSource, NoReleaseSource
 from .infrastructure.security import InMemoryLoginThrottle, JwtTokenService, Pbkdf2PasswordHasher
 
 
@@ -128,6 +138,8 @@ class Container:
     open_cash_drawer: printing.OpenCashDrawer
     print_test_receipt: printing.PrintTestReceipt
     list_printers: printing.ListPrinters
+    # versiones nuevas
+    check_for_updates: updates.CheckForUpdates
     # tareas que corren junto al servidor (las inicia la línea de comandos, no las pruebas)
     background_workers: tuple[PeriodicWorker, ...] = ()
 
@@ -139,6 +151,7 @@ def build_container(
     invoice_provider: InvoiceProvider | None = None,
     license_verifier: LicenseVerifier | None = None,
     receipt_printer: ReceiptPrinter | None = None,
+    release_source: ReleaseSource | None = None,
 ) -> Container:
     clock = clock or SystemClock()
     # La clave pública va dentro del programa a propósito: no se lee de .env ni de la base de datos.
@@ -169,6 +182,11 @@ def build_container(
     bus.subscribe(CashSessionClosed, backups.BackupOnCashClose(run_backup))
 
     printer = receipt_printer or EscPosReceiptPrinter()
+    releases = release_source or (
+        GitHubReleaseSource(config.update_repository, f"PuntoDeVenta/{__version__}")
+        if config.update_repository
+        else NoReleaseSource()
+    )
     sales_summary = reports.GetSalesSummary(uow)
     hasher = Pbkdf2PasswordHasher(config.password_iterations)
     tokens = JwtTokenService(config.secret_key, config.token_ttl_minutes, clock)
@@ -244,5 +262,6 @@ def build_container(
         open_cash_drawer=printing.OpenCashDrawer(uow, printer),
         print_test_receipt=printing.PrintTestReceipt(uow, printer, clock),
         list_printers=printing.ListPrinters(printer),
+        check_for_updates=updates.CheckForUpdates(releases, __version__, clock),
         background_workers=tuple(workers),
     )

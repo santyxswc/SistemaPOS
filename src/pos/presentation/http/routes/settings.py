@@ -7,13 +7,21 @@ from ....domain.printing import PrinterConfig, PrinterKind
 from ....domain.shared.values import parse_enum
 from .. import presenters
 from ..context import authenticated, container, current_actor
-from ..request import Body
+from ..request import Body, query_bool
 
 bp = Blueprint("settings", __name__)
 
 _TEXT_FIELDS = ("business_name", "tax_id", "address", "phone", "currency", "timezone", "receipt_footer",
                 "backup_folder")
 _FLAG_FIELDS = ("prices_include_tax", "allow_negative_stock", "credit_sales_enabled")
+
+
+@bp.get("/updates")
+@authenticated
+def updates():
+    """¿Hay una versión nueva del programa? ?force=1 vuelve a preguntar sin esperar las 6 horas."""
+    status = container().check_for_updates.execute(current_actor(), force=query_bool("force"))
+    return presenters.update_status(status)
 
 
 @bp.get("/settings")

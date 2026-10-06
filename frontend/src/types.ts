@@ -348,6 +348,13 @@ export interface InvoicingStatus {
   counts: Record<ElectronicDocument["status"], number>;
 }
 
+export interface UpdateStatus {
+  current: string;
+  available: boolean;
+  checked_at: string | null;
+  latest: { version: string; url: string; download_url: string | null; published_at: string | null; notes: string } | null;
+}
+
 export interface Items<T> {
   items: T[];
 }

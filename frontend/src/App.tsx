@@ -3,6 +3,7 @@ import { api, getToken, setToken, setUnauthorizedHandler } from "./api";
 import { InvoicingBanner } from "./components/Invoicing";
 import { LicenseBanner } from "./components/License";
 import { Toaster } from "./components/ui";
+import { UpdateBanner } from "./components/Updates";
 import { CashPage } from "./pages/Cash";
 import { CustomersPage } from "./pages/Customers";
 import { LoginPage } from "./pages/Login";
@@ -187,6 +188,7 @@ function Shell(props: { me: Me; settings: Settings; logout: () => void; reloadSe
             <>
               <LicenseBanner onOpenSettings={() => navigate("ajustes")} />
               <InvoicingBanner onOpenSettings={() => navigate("ajustes")} />
+              <UpdateBanner />
             </>
           )}
           <Page key={current.path} />

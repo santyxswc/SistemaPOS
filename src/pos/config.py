@@ -80,6 +80,7 @@ class AppConfig:
     host: str = "127.0.0.1"
     port: int = 8000
     invoice_provider: str = ""  # facturación electrónica: vacío = desactivada (ver infrastructure/invoicing.py)
+    update_repository: str = ""  # "usuario/repo" de GitHub donde se publican las versiones; vacío = no avisar
 
     @property
     def is_development(self) -> bool:
@@ -108,4 +109,12 @@ class AppConfig:
             host=env.get("POS_HOST", "127.0.0.1"),
             port=int(env.get("POS_PORT", "8000")),
             invoice_provider=env.get("POS_INVOICE_PROVIDER", "").strip(),
+            update_repository=_update_repository(env),
         )
+
+
+def _update_repository(env: Mapping[str, str]) -> str:
+    """POS_UPDATE_CHECK=0 apaga el aviso; POS_UPDATE_REPO cambia el repositorio (p. ej. una copia propia)."""
+    if env.get("POS_UPDATE_CHECK", "1").strip().lower() in ("0", "false", "no"):
+        return ""
+    return env.get("POS_UPDATE_REPO", "santyxswc/SistemaPOS").strip()

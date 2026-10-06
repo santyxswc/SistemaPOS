@@ -504,3 +504,29 @@ describe("impresión directa", () => {
     expect(print).not.toHaveBeenCalled(); // nunca aparece el cuadro del navegador
   });
 });
+
+describe("versión nueva", () => {
+  it("avisa al administrador y se puede ocultar hasta la siguiente", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    const admin: Me = { id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+      permissions: ["manage_settings", "sell", "operate_cash"] };
+    mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /auth/me") return { body: admin };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /updates")
+        return { body: { current: "0.2.0", available: true, checked_at: null,
+          latest: { version: "0.4.0", url: "https://github.com/x/releases/v0.4.0", download_url: "https://dl/setup.exe",
+            published_at: null, notes: "" } } };
+      return { status: 404, body: { error: { code: "not_found", message: "no simulado" } } };
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const banner = (await screen.findByText(/Hay una versión nueva/)).parentElement!;
+    expect(within(banner).getByRole("link", { name: "Descargar" }).getAttribute("href")).toBe("https://dl/setup.exe");
+    await user.click(within(banner).getByRole("button", { name: "Ahora no" }));
+    expect(screen.queryByText(/Hay una versión nueva/)).toBeNull();
+    expect(localStorage.getItem("pos.update-dismissed")).toBe("0.4.0");
+  });
+});

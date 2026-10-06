@@ -20,6 +20,7 @@ from ...application.use_cases.suppliers import (
     SupplierPaymentResult,
     SupplierStatement,
 )
+from ...application.use_cases.updates import UpdateStatus
 from ...domain.cash import CashMovement, CashSession
 from ...domain.catalog import Category, Product
 from ...domain.customers import Customer, LedgerEntry
@@ -482,4 +483,22 @@ def invoicing_status(value: InvoicingStatus) -> Json:
         "provider": value.provider,
         "needs_attention": value.needs_attention,
         "counts": {status.value: count for status, count in value.counts.items()},
+    }
+
+
+def update_status(value: UpdateStatus) -> Json:
+    latest = value.latest
+    return {
+        "current": value.current,
+        "available": value.available,
+        "checked_at": ts(value.checked_at),
+        "latest": None
+        if latest is None
+        else {
+            "version": latest.version,
+            "url": latest.url,
+            "download_url": latest.download_url,
+            "published_at": ts(latest.published_at),
+            "notes": latest.notes,
+        },
     }

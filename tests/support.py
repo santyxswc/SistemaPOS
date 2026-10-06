@@ -6,9 +6,11 @@ import os
 import tempfile
 import unittest
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from pos.application.actor import Actor
 from pos.application.use_cases.catalog import CreateProductCommand
@@ -17,11 +19,26 @@ from pos.application.use_cases.users import CreateUserCommand
 from pos.bootstrap import build_container
 from pos.config import AppConfig
 from pos.domain.catalog import Product
+from pos.domain.licensing import License
 from pos.domain.sales import Sale
 from pos.domain.shared.values import Money
+from pos.infrastructure.licensing import Ed25519LicenseVerifier, public_key_text, sign_license
 
 ADMIN_PASSWORD = "clave-segura-1"
 CASHIER_PASSWORD = "clave-segura-2"
+
+# Clave de licencias solo para pruebas: el programa real trae la pública del proveedor.
+TEST_LICENSE_KEY = Ed25519PrivateKey.generate()
+TEST_LICENSE_VERIFIER = Ed25519LicenseVerifier(public_key_text(TEST_LICENSE_KEY))
+
+
+def issue_license(
+    *, plan: str = "Mediano", max_users: int | None = 3, issued_on: date = date(2026, 10, 1),
+    expires_on: date | None = date(2027, 10, 1), business_name: str = "Tienda de prueba",
+) -> str:
+    license = License(license_id="prueba-1", business_name=business_name, plan=plan, max_users=max_users,
+                      issued_on=issued_on, expires_on=expires_on)
+    return sign_license(license, TEST_LICENSE_KEY)
 
 
 class FixedClock:
@@ -50,7 +67,9 @@ class PosTestCase(unittest.TestCase):
             password_iterations=1_000,  # rápido en pruebas; en producción 600.000
             business_name="Tienda de prueba",
         )
-        self.c = build_container(config, clock=None if self.use_real_clock else self.clock)
+        self.c = build_container(
+            config, clock=None if self.use_real_clock else self.clock, license_verifier=TEST_LICENSE_VERIFIER
+        )
         admin = self.c.bootstrap_admin.execute(username="admin", full_name="Dueña", password=ADMIN_PASSWORD)
         self.admin = Actor.from_user(admin)
 
@@ -92,3 +111,34 @@ class PosTestCase(unittest.TestCase):
 
     def stock_of(self, product: Product) -> Decimal:
         return self.c.get_product.execute(product.id).stock
+
+
+class ApiTestCase(PosTestCase):
+    """La API por HTTP con el cliente de pruebas de Flask, ya con sesión de administrador."""
+
+    use_real_clock = True  # los JWT se validan contra la hora real
+
+    def setUp(self) -> None:
+        super().setUp()
+        from pos.presentation.http.app import create_app
+
+        self.client = create_app(self.c).test_client()
+        self.token = self.login("admin", ADMIN_PASSWORD)
+
+    def login(self, username: str, password: str) -> str:
+        response = self.client.post("/api/v1/auth/login", json={"username": username, "password": password})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        return response.get_json()["access_token"]
+
+    def api(self, method: str, url: str, token: str | None = None, **kwargs):  # noqa: ANN201
+        headers = {"Authorization": f"Bearer {token or self.token}"}
+        return self.client.open(url, method=method, headers=headers, **kwargs)
+
+
+def tamper(code: str) -> str:
+    """Cambia un carácter de la firma. Se toca el medio: el último carácter de base64 lleva
+    bits de relleno que el decodificador ignora, y cambiarlo puede no alterar la firma."""
+    prefix, data, signature = code.split(".")
+    middle = len(signature) // 2
+    replacement = "A" if signature[middle] != "A" else "B"
+    return f"{prefix}.{data}.{signature[:middle]}{replacement}{signature[middle + 1:]}"

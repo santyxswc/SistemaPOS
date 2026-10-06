@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Recorre la interfaz como un cajero, contra un servidor simulado.
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -18,8 +18,8 @@ const SETTINGS: Settings = {
   default_tax_rate: "19",
   allow_negative_stock: false,
   credit_sales_enabled: true,
-  max_users: 3,
   receipt_footer: "¡Gracias por su compra!",
+  backup_folder: "",
   payment_methods: [
     { code: "efectivo", name: "Efectivo", kind: "cash", active: true },
     { code: "nequi", name: "Nequi", kind: "electronic", active: true },
@@ -56,7 +56,7 @@ function mockServer(handler: Handler) {
       const call: Call = {
         method: init.method ?? "GET",
         path: url.pathname.replace("/api/v1", "") + url.search,
-        body: init.body ? JSON.parse(String(init.body)) : undefined,
+        body: init.body instanceof FormData ? init.body : init.body ? JSON.parse(String(init.body)) : undefined,
         headers: (init.headers ?? {}) as Record<string, string>,
       };
       calls.push(call);
@@ -229,5 +229,100 @@ describe("venta en la caja", () => {
     const labels = within(menu).getAllByRole("link").map((link) => link.textContent);
     expect(labels.some((label) => label?.includes("Vender"))).toBe(true);
     expect(labels.some((label) => label?.includes("Reportes") || label?.includes("Usuarios"))).toBe(false);
+  });
+});
+
+describe("licencia", () => {
+  const ADMIN: Me = {
+    id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+    permissions: ["manage_settings", "manage_users", "sell", "operate_cash", "view_reports"],
+  };
+  const EXPIRED = {
+    state: "trial_expired", valid: false, needs_attention: true, max_users: 1, expires_on: "2026-11-05", days_left: 0,
+    message: "El periodo de prueba terminó. Comuníquese con su proveedor para activar la licencia.", license: null,
+  };
+  const ACTIVE = {
+    state: "active", valid: true, needs_attention: false, max_users: 3, expires_on: "2027-10-06", days_left: 365,
+    message: "Licencia Mediano activa: vence en 365 días",
+    license: { id: "l1", business_name: "Tienda Doña Rosa", plan: "Mediano", max_users: 3, issued_on: "2026-10-06",
+      expires_on: "2027-10-06" },
+  };
+
+  it("avisa al administrador y activa el código pegado en Ajustes", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    let activated = false;
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /auth/me") return { body: ADMIN };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /license") return { body: activated ? ACTIVE : EXPIRED };
+      if (route === "POST /license") {
+        activated = true;
+        return { body: ACTIVE };
+      }
+      if (route === "GET /backups") return { body: { items: [] } };
+      return { status: 404, body: { error: { code: "not_found", message: "no simulado" } } };
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const banner = await screen.findByText(/periodo de prueba terminó/);
+    await user.click(within(banner.parentElement!).getByRole("button", { name: "Activar licencia" }));
+
+    const card = await screen.findByRole("region", { name: "Licencia" });
+    await user.type(within(card).getByLabelText(/Código de licencia/), "POS1.abc.def");
+    await user.click(within(card).getByRole("button", { name: "Activar licencia" }));
+
+    expect(await within(card).findByText("Licencia Mediano activa: vence en 365 días")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/periodo de prueba terminó/)).toBeNull()); // el aviso desaparece
+    expect(within(card).getByText("06/10/2027")).toBeTruthy();
+    expect(calls.find((c) => c.method === "POST" && c.path === "/license")?.body).toEqual({ code: "POS1.abc.def" });
+  });
+});
+
+describe("importar productos", () => {
+  const ADMIN: Me = {
+    id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+    permissions: ["manage_settings", "manage_catalog", "manage_inventory", "sell", "operate_cash", "view_reports"],
+  };
+  const REPORT = {
+    total_rows: 3, created: 2, updated: 0, unchanged: 0, skipped_existing: 0, new_categories: ["Granos"],
+    errors: [{ line: 4, message: "Falta el precio de venta" }],
+  };
+
+  it("revisa el archivo sin guardar y luego importa las filas válidas", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    window.location.hash = "/productos";
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /auth/me") return { body: ADMIN };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /license") return { body: { needs_attention: false } };
+      if (route === "GET /categories" || route === "GET /products") return { body: { items: [] } };
+      if (route === "POST /products/import") {
+        const dryRun = call.path.includes("dry_run=true");
+        return { body: { ...REPORT, dry_run: dryRun } };
+      }
+      return { status: 404, body: { error: { code: "not_found", message: "no simulado" } } };
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Importar" }));
+    const dialog = await screen.findByRole("dialog", { name: "Importar productos" });
+    const file = new File(["Nombre;Precio\nArroz;2500\n"], "productos.csv", { type: "text/csv" });
+    await user.upload(within(dialog).getByLabelText("Archivo"), file);
+    await user.click(within(dialog).getByRole("button", { name: "Revisar archivo" }));
+
+    expect(await within(dialog).findByText("2 productos nuevos")).toBeTruthy();
+    expect(within(dialog).getByText("Falta el precio de venta")).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: "Importar 2 productos" }));
+
+    expect(await screen.findByText("2 productos importados")).toBeTruthy();
+    const uploads = calls.filter((c) => c.path.startsWith("/products/import"));
+    expect(uploads.map((c) => c.path)).toEqual([
+      "/products/import?dry_run=true&update_existing=false",
+      "/products/import?dry_run=false&update_existing=false",
+    ]);
   });
 });

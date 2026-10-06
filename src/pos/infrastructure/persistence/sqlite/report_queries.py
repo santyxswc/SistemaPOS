@@ -13,12 +13,14 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from ....application.ports import PaymentTotal, ProductSales, SalesFilter, SalesTotals
+from ....application.ports import PaymentTotal, ProductSales, SaleRow, SalesFilter, SalesTotals
 from ....domain.payments import PaymentKind
 from ....domain.sales import SaleStatus
 from ....domain.shared.values import Money
 from .repositories import _ts  # mismo formato con que se guardan las fechas
 
+_UNIT_SEPARATOR = "\x1f"  # separa método y monto dentro de GROUP_CONCAT (no aparece en nombres)
+_RECORD_SEPARATOR = "\x1e"
 _COMPLETED = SaleStatus.COMPLETED.value
 _VOIDED = SaleStatus.VOIDED.value
 
@@ -142,3 +144,44 @@ class SqliteSalesReportQueries:
             )
             for row in rows
         ]
+
+    def sale_rows(self, where: SalesFilter, limit: int) -> list[SaleRow]:
+        conditions, params = _conditions(where)
+        clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = self._conn.execute(
+            f"""
+            SELECT s.number, s.created_at, s.status, s.subtotal, s.tax_total, s.discount_total, s.total,
+                   u.full_name AS cashier, c.name AS customer,
+                   (SELECT GROUP_CONCAT(p.method_name || char(31) || p.applied_amount, char(30))
+                      FROM (SELECT * FROM sale_payments WHERE sale_id = s.id ORDER BY position) p) AS payments
+            FROM sales s
+            JOIN users u ON u.id = s.cashier_id
+            LEFT JOIN customers c ON c.id = s.customer_id
+            {clause}
+            ORDER BY s.number
+            LIMIT ?
+            """,
+            (*params, limit),
+        ).fetchall()
+        return [
+            SaleRow(
+                number=row["number"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                status=row["status"],
+                cashier=row["cashier"],
+                customer=row["customer"],
+                subtotal=Money(Decimal(row["subtotal"])),
+                tax_total=Money(Decimal(row["tax_total"])),
+                discount_total=Money(Decimal(row["discount_total"])),
+                total=Money(Decimal(row["total"])),
+                payments=_split_payments(row["payments"]),
+            )
+            for row in rows
+        ]
+
+
+def _split_payments(text: str | None) -> tuple[tuple[str, Money], ...]:
+    if not text:
+        return ()
+    pairs = (item.split(_UNIT_SEPARATOR) for item in text.split(_RECORD_SEPARATOR))
+    return tuple((name, Money(Decimal(amount))) for name, amount in pairs if Decimal(amount) > 0)

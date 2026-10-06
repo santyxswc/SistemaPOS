@@ -6,6 +6,7 @@ Decimal; las fechas en UTC con formato ISO 8601 (ordenables como texto).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sqlite3
 import unicodedata
@@ -89,7 +90,10 @@ class SqliteSettingsRepository:
         row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (self._KEY,)).fetchone()
         if row is None:
             return None
-        data = json.loads(row["value"])
+        stored = json.loads(row["value"])
+        # Ignora claves de versiones anteriores (p. ej. max_users, que ahora viene de la licencia).
+        known = {f.name for f in dataclasses.fields(BusinessSettings)}
+        data = {key: value for key, value in stored.items() if key in known}
         data["default_tax_rate"] = TaxRate(Decimal(data["default_tax_rate"]))
         data["payment_methods"] = tuple(
             PaymentMethodConfig(code=m["code"], name=m["name"], kind=PaymentKind(m["kind"]), active=m["active"])
@@ -109,8 +113,8 @@ class SqliteSettingsRepository:
             "default_tax_rate": str(settings.default_tax_rate.percent),
             "allow_negative_stock": settings.allow_negative_stock,
             "credit_sales_enabled": settings.credit_sales_enabled,
-            "max_users": settings.max_users,
             "receipt_footer": settings.receipt_footer,
+            "backup_folder": settings.backup_folder,
             "payment_methods": [
                 {"code": m.code, "name": m.name, "kind": m.kind.value, "active": m.active}
                 for m in settings.payment_methods
@@ -120,6 +124,38 @@ class SqliteSettingsRepository:
             "INSERT INTO settings (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (self._KEY, json.dumps(data, ensure_ascii=False)),
+        )
+
+
+class SqliteLicenseRepository:
+    """Usa la misma tabla clave-valor de la configuración, con claves propias."""
+
+    _CODE = "license_code"
+    _INSTALLED_AT = "installed_at"
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get_code(self) -> str | None:
+        return self._get(self._CODE)
+
+    def save_code(self, code: str) -> None:
+        self._set(self._CODE, code)
+
+    def get_installed_at(self) -> datetime | None:
+        return _dt(self._get(self._INSTALLED_AT))
+
+    def save_installed_at(self, at: datetime) -> None:
+        self._set(self._INSTALLED_AT, _ts(at))
+
+    def _get(self, key: str) -> str | None:
+        row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def _set(self, key: str, value: str | None) -> None:
+        self._conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
         )
 
 
@@ -294,6 +330,11 @@ class SqliteProductRepository:
             "AND CAST(stock AS REAL) <= CAST(min_stock AS REAL) ORDER BY name COLLATE NOCASE"
         ).fetchall()
         return [product for product in map(self._to_product, rows) if product.is_low_stock]
+
+    def list_all(self, *, include_inactive: bool = False) -> list[Product]:
+        where = "" if include_inactive else "WHERE active = 1"
+        rows = self._conn.execute(f"SELECT * FROM products {where} ORDER BY name COLLATE NOCASE").fetchall()
+        return [self._to_product(row) for row in rows]
 
     def _one(self, sql: str, params: tuple[Any, ...]) -> Product | None:
         row = self._conn.execute(sql, params).fetchone()

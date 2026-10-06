@@ -15,7 +15,13 @@ export type Permission =
   | "collect_payments"
   | "view_reports";
 
-export type Role = "admin" | "cashier";
+export type Role = "admin" | "supervisor" | "cashier";
+
+export const ROLE_LABEL: Record<Role, string> = {
+  admin: "Administrador",
+  supervisor: "Supervisor",
+  cashier: "Cajero",
+};
 
 export interface Me {
   id: string;
@@ -54,9 +60,39 @@ export interface Settings {
   default_tax_rate: string;
   allow_negative_stock: boolean;
   credit_sales_enabled: boolean;
-  max_users: number | null;
   receipt_footer: string;
+  backup_folder: string;
   payment_methods: PaymentMethod[];
+}
+
+export interface LicenseStatus {
+  state: "trial" | "active" | "trial_expired" | "expired";
+  valid: boolean;
+  needs_attention: boolean;
+  message: string;
+  max_users: number | null;
+  expires_on: string | null;
+  days_left: number | null;
+  license: {
+    id: string;
+    business_name: string;
+    plan: string;
+    max_users: number | null;
+    issued_on: string;
+    expires_on: string | null;
+  } | null;
+}
+
+export interface BackupFile {
+  name: string;
+  created_at: string;
+  size_bytes: number;
+}
+
+export interface BackupResult {
+  file: BackupFile;
+  extra_copy: string | null;
+  extra_error: string | null;
 }
 
 export type Unit = "unit" | "kg" | "lb" | "l";

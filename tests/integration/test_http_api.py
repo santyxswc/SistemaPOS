@@ -1,27 +1,9 @@
 """La API completa a través de HTTP (cliente de pruebas de Flask)."""
 
-from pos.presentation.http.app import create_app
-
-from ..support import ADMIN_PASSWORD, CASHIER_PASSWORD, PosTestCase
+from ..support import ADMIN_PASSWORD, CASHIER_PASSWORD, ApiTestCase, issue_license, tamper
 
 
-class HttpApiTests(PosTestCase):
-    use_real_clock = True  # los JWT se validan contra la hora real
-
-    def setUp(self):
-        super().setUp()
-        self.client = create_app(self.c).test_client()
-        self.token = self.login("admin", ADMIN_PASSWORD)
-
-    def login(self, username, password):
-        response = self.client.post("/api/v1/auth/login", json={"username": username, "password": password})
-        self.assertEqual(response.status_code, 200, response.get_json())
-        return response.get_json()["access_token"]
-
-    def api(self, method, url, token=None, **kwargs):
-        headers = {"Authorization": f"Bearer {token or self.token}"}
-        return self.client.open(url, method=method, headers=headers, **kwargs)
-
+class HttpApiTests(ApiTestCase):
     def test_idempotency_key_makes_sale_retries_safe(self):
         product_id = self.api("POST", "/api/v1/products", json={
             "sku": "PAN", "name": "Pan", "price": "500", "initial_stock": "10",
@@ -136,14 +118,30 @@ class HttpApiTests(PosTestCase):
         response = self.api("PATCH", "/api/v1/settings", json={
             "business_name": "Sabor Callejero",
             "default_tax_rate": "8",
-            "max_users": 5,
         })
         self.assertEqual(response.status_code, 200, response.get_json())
         settings = self.api("GET", "/api/v1/settings").get_json()
-        self.assertEqual((settings["business_name"], settings["default_tax_rate"], settings["max_users"]),
-                         ("Sabor Callejero", "8", 5))
+        self.assertEqual((settings["business_name"], settings["default_tax_rate"]), ("Sabor Callejero", "8"))
         unknown = self.api("PATCH", "/api/v1/settings", json={"color": "rojo"})
         self.assertEqual(unknown.status_code, 400)
+
+    def test_the_user_limit_comes_from_the_license_and_cannot_be_edited(self):
+        response = self.api("PATCH", "/api/v1/settings", json={"max_users": 99})
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("max_users", self.api("GET", "/api/v1/settings").get_json())
+
+    def test_license_status_and_activation(self):
+        trial = self.api("GET", "/api/v1/license").get_json()
+        self.assertEqual((trial["state"], trial["valid"], trial["license"]), ("trial", True, None))
+
+        code = issue_license(plan="Mediano", max_users=4, expires_on=None)
+        response = self.api("POST", "/api/v1/license", json={"code": code})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        active = response.get_json()
+        self.assertEqual((active["state"], active["max_users"], active["license"]["plan"]), ("active", 4, "Mediano"))
+
+        forged = self.api("POST", "/api/v1/license", json={"code": tamper(code)})
+        self.assertEqual(forged.status_code, 400)
 
     def test_unknown_routes_answer_json(self):
         response = self.api("GET", "/api/v1/no-existe")

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api } from "../api";
-import { Empty, ErrorAlert, Stat, todayISO, useLoad } from "../components/ui";
+import { Empty, ErrorAlert, Stat, todayISO, useAction, useLoad } from "../components/ui";
 import { formatMoney, formatQuantity, toCents } from "../money";
 import type { Items, ProductSales, SalesSummary } from "../types";
 
@@ -48,6 +48,7 @@ export function ReportsPage() {
   const summary = useLoad(() => api.get<SalesSummary>("/reports/sales-summary", { from, to, group_by: groupBy }), [from, to, groupBy]);
   const top = useLoad(() => api.get<Items<ProductSales>>("/reports/top-products", { from, to, limit: 15 }), [from, to]);
   const data = summary.data;
+  const exporting = useAction();
 
   return (
     <>
@@ -59,11 +60,19 @@ export function ReportsPage() {
               {preset.label}
             </button>
           ))}
-          <input className="input" type="date" value={from} onChange={(e) => setRange([e.target.value, to])} aria-label="Desde" />
-          <input className="input" type="date" value={to} onChange={(e) => setRange([from, e.target.value])} aria-label="Hasta" />
+          <input className="input input-inline" type="date" value={from} onChange={(e) => setRange([e.target.value, to])} aria-label="Desde" />
+          <input className="input input-inline" type="date" value={to} onChange={(e) => setRange([from, e.target.value])} aria-label="Hasta" />
+          <button
+            className="btn"
+            disabled={exporting.busy}
+            onClick={() => exporting.run(() => api.download("/reports/export", { from, to }, "ventas.xlsx"))}
+            title="Resumen, ventas una por una con sus impuestos y productos vendidos: lo que pide el contador"
+          >
+            {exporting.busy ? "Exportando…" : "Exportar a Excel"}
+          </button>
         </div>
       </div>
-      <ErrorAlert error={summary.error ?? top.error} />
+      <ErrorAlert error={summary.error ?? top.error ?? exporting.error} />
       {data && (
         <>
           <div className="stats">

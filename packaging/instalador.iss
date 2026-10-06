@@ -34,6 +34,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "autostart"; Description: "Abrir el Punto de Venta al encender el computador"; GroupDescription: "Inicio:"
 Name: "dailybackup"; Description: "Hacer una copia de seguridad todos los días a las 10 p. m."; GroupDescription: "Respaldo:"
 
 [Files]
@@ -43,6 +44,8 @@ Source: "..\dist\PuntoDeVenta\*"; DestDir: "{app}"; Flags: ignoreversion recurse
 Name: "{autoprograms}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"
 Name: "{autoprograms}\Copia de seguridad del Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Parameters: "backup"
 Name: "{autodesktop}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Tasks: desktopicon
+; Al iniciar sesión en Windows el sistema queda listo; el acceso directo del escritorio solo abre el navegador.
+Name: "{userstartup}\Punto de Venta"; Filename: "{app}\PuntoDeVenta.exe"; Parameters: "start --no-browser"; WorkingDir: "{app}"; Flags: runminimized; Tasks: autostart
 
 [Run]
 Filename: "schtasks.exe"; Parameters: "/create /f /tn ""PuntoDeVenta respaldo"" /sc daily /st 22:00 /tr ""\""{app}\PuntoDeVenta.exe\"" backup"""; Flags: runhidden; Tasks: dailybackup

@@ -19,6 +19,7 @@ from ..domain.cash import CashSession
 from ..domain.catalog import Category, Product
 from ..domain.customers import Customer, LedgerEntry
 from ..domain.inventory import StockMovement
+from ..domain.licensing import License
 from ..domain.payments import PaymentKind
 from ..domain.sales import Sale
 from ..domain.settings import BusinessSettings
@@ -67,6 +68,45 @@ class EventPublisher(Protocol):
     def publish(self, events: Sequence[DomainEvent]) -> None: ...
 
 
+class LicenseVerifier(Protocol):
+    """Comprueba la firma de un código de licencia emitido por el proveedor del sistema."""
+
+    def verify(self, code: str) -> License:
+        """Devuelve la licencia o lanza ValidationError si el código es falso o está dañado."""
+        ...
+
+
+@dataclass(frozen=True)
+class BackupFile:
+    name: str
+    created_at: datetime
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class BackupResult:
+    file: BackupFile
+    extra_copy: str | None = None  # ruta de la copia adicional (USB, OneDrive...)
+    extra_error: str | None = None  # por qué no se pudo copiar allí (USB desconectada...)
+
+
+class BackupService(Protocol):
+    """Copias de seguridad de la base de datos del negocio."""
+
+    def create(self, *, at: datetime, extra_folder: str | None = None) -> BackupResult:
+        """Copia verificada en la carpeta principal y, si se indica, otra en `extra_folder`.
+
+        Que falle la copia adicional nunca hace fallar el respaldo principal.
+        """
+        ...
+
+    def list_recent(self, limit: int = 10) -> list[BackupFile]: ...
+
+    def check_folder(self, folder: str) -> None:
+        """Lanza ValidationError si la carpeta no existe o no se puede escribir en ella."""
+        ...
+
+
 class InvoiceProvider(Protocol):
     """Punto de extensión para facturación electrónica (proveedor autorizado por la DIAN)."""
 
@@ -80,6 +120,18 @@ class SettingsRepository(Protocol):
     def get(self) -> BusinessSettings | None: ...
 
     def save(self, settings: BusinessSettings) -> None: ...
+
+
+class LicenseRepository(Protocol):
+    """Guarda el código de licencia tal como se instaló y la fecha de instalación (inicio de la prueba)."""
+
+    def get_code(self) -> str | None: ...
+
+    def save_code(self, code: str) -> None: ...
+
+    def get_installed_at(self) -> datetime | None: ...
+
+    def save_installed_at(self, at: datetime) -> None: ...
 
 
 class SequenceRepository(Protocol):
@@ -134,6 +186,10 @@ class ProductRepository(Protocol):
     ) -> list[Product]: ...
 
     def list_low_stock(self) -> list[Product]: ...
+
+    def list_all(self, *, include_inactive: bool = False) -> list[Product]:
+        """Todo el catálogo ordenado por nombre (exportar a Excel)."""
+        ...
 
 
 class StockMovementRepository(Protocol):
@@ -236,6 +292,22 @@ class ProductSales:
     total: Money
 
 
+@dataclass(frozen=True)
+class SaleRow:
+    """Una venta en una fila, para exportar (sin cargar líneas ni pagos completos)."""
+
+    number: int
+    created_at: datetime
+    status: str
+    cashier: str
+    customer: str | None
+    subtotal: Money
+    tax_total: Money
+    discount_total: Money
+    total: Money
+    payments: tuple[tuple[str, Money], ...]  # (método, monto neto sin vueltas)
+
+
 class SalesReportQueries(Protocol):
     """Todas las cifras cuentan solo ventas no anuladas, salvo `voided_count`."""
 
@@ -251,6 +323,10 @@ class SalesReportQueries(Protocol):
 
     def top_products(self, where: SalesFilter, limit: int) -> list[ProductSales]: ...
 
+    def sale_rows(self, where: SalesFilter, limit: int) -> list[SaleRow]:
+        """Todas las ventas del periodo, anuladas incluidas, de la más antigua a la más reciente."""
+        ...
+
 
 # --- Unidad de trabajo -------------------------------------------------------------
 
@@ -263,6 +339,7 @@ class UnitOfWork(ABC):
     """
 
     settings: SettingsRepository
+    licensing: LicenseRepository
     sequences: SequenceRepository
     users: UserRepository
     categories: CategoryRepository

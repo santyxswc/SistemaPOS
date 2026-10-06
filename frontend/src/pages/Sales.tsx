@@ -23,10 +23,10 @@ export function SalesPage() {
         <h1>Ventas</h1>
         <div className="row">
           <label className="row small">
-            Desde <input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            Desde <input className="input input-inline" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </label>
           <label className="row small">
-            Hasta <input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            Hasta <input className="input input-inline" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
         </div>
       </div>

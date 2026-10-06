@@ -15,7 +15,7 @@ import {
 import { CustomerPicker } from "../components/CustomerPicker";
 import { OpenCash } from "../components/OpenCash";
 import { Receipt } from "../components/Receipt";
-import { ErrorAlert, Modal, useAction } from "../components/ui";
+import { ConfirmDialog, ErrorAlert, Modal, useAction } from "../components/ui";
 import {
   type Cents,
   centsToApi,
@@ -62,6 +62,7 @@ function Register() {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [checkout, setCheckout] = useState(false);
   const [lastSale, setLastSale] = useState<{ sale: Sale; customer: Customer | null } | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const total = cartTotal(lines, settings.prices_include_tax);
@@ -69,14 +70,14 @@ function Register() {
 
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "F9" && lines.length > 0 && !checkout) {
+      if (event.key === "F9" && lines.length > 0 && !checkout && !confirmingClear) {
         event.preventDefault();
         setCheckout(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lines.length, checkout]);
+  }, [lines.length, checkout, confirmingClear]);
 
   const focusSearch = () => window.setTimeout(() => searchRef.current?.focus(), 0);
 
@@ -133,7 +134,8 @@ function Register() {
           <div className="muted">Total a pagar</div>
           <div className="grand-total">{formatMoney(total)}</div>
           <div className="muted small" style={{ marginBottom: 16 }}>
-            {lines.length} productos · {formatQuantity(units / 1000)} unidades
+            {lines.length} {lines.length === 1 ? "producto" : "productos"} · {formatQuantity(units / 1000)}{" "}
+            {units === 1000 ? "unidad" : "unidades"}
             {!settings.prices_include_tax && " · impuesto incluido en el total"}
           </div>
           <button
@@ -148,12 +150,7 @@ function Register() {
             className="btn"
             style={{ width: "100%", marginTop: 8 }}
             disabled={lines.length === 0}
-            onClick={() => {
-              if (window.confirm("¿Vaciar la venta actual?")) {
-                setLines([]);
-                focusSearch();
-              }
-            }}
+            onClick={() => setConfirmingClear(true)}
           >
             Cancelar venta
           </button>
@@ -172,6 +169,28 @@ function Register() {
             setCheckout(false);
             setLines([]);
             setLastSale({ sale, customer });
+          }}
+        />
+      )}
+
+      {confirmingClear && (
+        <ConfirmDialog
+          title="Cancelar venta"
+          message={
+            lines.length === 1
+              ? "Se quitará el producto de la venta actual."
+              : `Se quitarán los ${lines.length} productos de la venta actual.`
+          }
+          confirmLabel="Sí, vaciar la venta"
+          danger
+          onCancel={() => {
+            setConfirmingClear(false);
+            focusSearch();
+          }}
+          onConfirm={() => {
+            setConfirmingClear(false);
+            setLines([]);
+            focusSearch();
           }}
         />
       )}

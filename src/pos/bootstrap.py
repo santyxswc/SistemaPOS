@@ -7,16 +7,33 @@ datos, un proveedor de facturación electrónica, notificaciones) y nada más.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from .application.event_handlers import ElectronicInvoicingHandler, log_low_stock
-from .application.ports import Clock, InvoiceProvider, UnitOfWorkFactory
-from .application.use_cases import cash, catalog, customers, inventory, reports, sales, settings, users
+from .application.ports import Clock, InvoiceProvider, LicenseVerifier, UnitOfWorkFactory
+from .application.use_cases import (
+    backups,
+    cash,
+    catalog,
+    catalog_import,
+    customers,
+    inventory,
+    licensing,
+    reports,
+    sales,
+    settings,
+    users,
+)
 from .config import AppConfig
+from .domain.cash import CashSessionClosed
 from .domain.catalog import StockLow
 from .domain.sales import SaleCompleted
 from .infrastructure.clock import SystemClock
 from .infrastructure.events import SyncEventBus
 from .infrastructure.invoicing import NoInvoiceProvider
+from .infrastructure.license_key import PUBLIC_KEY
+from .infrastructure.licensing import Ed25519LicenseVerifier
+from .infrastructure.persistence.sqlite.backup import SqliteBackupService
 from .infrastructure.persistence.sqlite.migrations import migrate
 from .infrastructure.persistence.sqlite.unit_of_work import SqliteUnitOfWork
 from .infrastructure.security import InMemoryLoginThrottle, JwtTokenService, Pbkdf2PasswordHasher
@@ -35,10 +52,17 @@ class Container:
     create_user: users.CreateUser
     update_user: users.UpdateUser
     change_own_password: users.ChangeOwnPassword
+    reset_password_from_console: users.ResetPasswordFromConsole
     list_users: users.ListUsers
+    # licencia
+    get_license_status: licensing.GetLicenseStatus
+    install_license: licensing.InstallLicense
     # configuración
     get_settings: settings.GetSettings
     update_settings: settings.UpdateSettings
+    # respaldos
+    run_backup: backups.RunBackup
+    list_backups: backups.ListBackups
     # catálogo
     create_category: catalog.CreateCategory
     list_categories: catalog.ListCategories
@@ -47,6 +71,8 @@ class Container:
     get_product: catalog.GetProduct
     find_product_by_code: catalog.FindProductByCode
     search_products: catalog.SearchProducts
+    export_catalog: catalog.ExportCatalog
+    import_products: catalog_import.ImportProducts
     # inventario
     register_purchase: inventory.RegisterPurchase
     adjust_stock: inventory.AdjustStock
@@ -74,6 +100,7 @@ class Container:
     # reportes
     get_sales_summary: reports.GetSalesSummary
     get_top_products: reports.GetTopProducts
+    export_sales_report: reports.ExportSalesReport
 
 
 def build_container(
@@ -81,8 +108,12 @@ def build_container(
     *,
     clock: Clock | None = None,
     invoice_provider: InvoiceProvider | None = None,
+    license_verifier: LicenseVerifier | None = None,
 ) -> Container:
     clock = clock or SystemClock()
+    # La clave pública va dentro del programa a propósito: no se lee de .env ni de la base de datos.
+    verifier = license_verifier or Ed25519LicenseVerifier(PUBLIC_KEY)
+    license_policy = licensing.LicensePolicy(verifier, clock)
 
     bus = SyncEventBus()
     bus.subscribe(StockLow, log_low_stock)
@@ -93,9 +124,14 @@ def build_container(
     def uow(*, read_only: bool = False) -> SqliteUnitOfWork:
         return SqliteUnitOfWork(config.database_path, bus, read_only=read_only)
 
+    backup_service = SqliteBackupService(config.database_path, Path(config.database_path).parent / "backups")
+    run_backup = backups.RunBackup(uow, backup_service, clock)
+    bus.subscribe(CashSessionClosed, backups.BackupOnCashClose(run_backup))
+
+    sales_summary = reports.GetSalesSummary(uow)
     hasher = Pbkdf2PasswordHasher(config.password_iterations)
     tokens = JwtTokenService(config.secret_key, config.token_ttl_minutes, clock)
-    settings.EnsureSettings(uow).execute(config.business_name)
+    settings.EnsureSettings(uow, clock).execute(config.business_name)
 
     return Container(
         config=config,
@@ -105,12 +141,17 @@ def build_container(
         bootstrap_admin=users.BootstrapAdmin(uow, hasher, clock),
         get_setup_status=users.GetSetupStatus(uow),
         complete_initial_setup=users.CompleteInitialSetup(uow, hasher, clock),
-        create_user=users.CreateUser(uow, hasher, clock),
-        update_user=users.UpdateUser(uow, hasher),
+        create_user=users.CreateUser(uow, hasher, clock, license_policy),
+        update_user=users.UpdateUser(uow, hasher, license_policy),
         change_own_password=users.ChangeOwnPassword(uow, hasher),
+        reset_password_from_console=users.ResetPasswordFromConsole(uow, hasher, license_policy),
         list_users=users.ListUsers(uow),
+        get_license_status=licensing.GetLicenseStatus(uow, license_policy),
+        install_license=licensing.InstallLicense(uow, verifier, license_policy, clock),
         get_settings=settings.GetSettings(uow),
-        update_settings=settings.UpdateSettings(uow),
+        update_settings=settings.UpdateSettings(uow, backup_service),
+        run_backup=run_backup,
+        list_backups=backups.ListBackups(backup_service),
         create_category=catalog.CreateCategory(uow),
         list_categories=catalog.ListCategories(uow),
         create_product=catalog.CreateProduct(uow, clock),
@@ -118,6 +159,8 @@ def build_container(
         get_product=catalog.GetProduct(uow),
         find_product_by_code=catalog.FindProductByCode(uow),
         search_products=catalog.SearchProducts(uow),
+        export_catalog=catalog.ExportCatalog(uow),
+        import_products=catalog_import.ImportProducts(uow, clock),
         register_purchase=inventory.RegisterPurchase(uow, clock),
         adjust_stock=inventory.AdjustStock(uow, clock),
         list_low_stock=inventory.ListLowStock(uow),
@@ -138,6 +181,7 @@ def build_container(
         search_customers=customers.SearchCustomers(uow),
         get_customer_statement=customers.GetCustomerStatement(uow),
         register_customer_payment=customers.RegisterCustomerPayment(uow, clock),
-        get_sales_summary=reports.GetSalesSummary(uow),
+        get_sales_summary=sales_summary,
         get_top_products=reports.GetTopProducts(uow),
+        export_sales_report=reports.ExportSalesReport(uow, sales_summary),
     )

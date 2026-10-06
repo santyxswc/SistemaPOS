@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -44,6 +45,36 @@ def to_decimal(value: object, field: str = "valor") -> Decimal:
     if not result.is_finite():
         raise ValidationError(f"{field}: debe ser un número finito")
     return result
+
+
+_THOUSANDS_GROUPS = re.compile(r"\d{1,3}([.,]\d{3})+")
+
+
+def parse_local_decimal(value: object, field: str = "valor") -> Decimal:
+    """Lee números como los escribe la gente en Colombia: «$2.500», «2.500,50», «19 %», «1,5».
+
+    - Con punto y coma a la vez, el último separador es el decimal: 2.500,50 y 2,500.50.
+    - Con un solo tipo de separador repetido en grupos de tres (2.500 o 1.250.000) son miles.
+    - En otro caso el separador es decimal: 2,5 o 2.75.
+    Los Decimal (celdas numéricas de Excel) se aceptan tal cual.
+    """
+    if isinstance(value, Decimal) or isinstance(value, int) and not isinstance(value, bool):
+        return to_decimal(value, field)
+    text = re.sub(r"[\s$%]", "", str(value or "")).replace("COP", "")
+    if not text:
+        raise ValidationError(f"{field}: falta el número")
+    sign = ""
+    if text[0] in "+-":
+        sign, text = ("-" if text[0] == "-" else ""), text[1:]
+    if "." in text and "," in text:
+        decimal_mark = "." if text.rfind(".") > text.rfind(",") else ","
+        thousands = "," if decimal_mark == "." else "."
+        text = text.replace(thousands, "").replace(decimal_mark, ".")
+    elif _THOUSANDS_GROUPS.fullmatch(text) and len({ch for ch in text if ch in ".,"}) == 1:
+        text = text.replace(".", "").replace(",", "")
+    else:
+        text = text.replace(",", ".")
+    return to_decimal(sign + text, field)
 
 
 def to_quantity(value: object, field: str = "cantidad") -> Decimal:

@@ -1,4 +1,8 @@
-"""Configuración del negocio: todo lo que cambia de un cliente a otro sin tocar código."""
+"""Configuración del negocio: todo lo que cambia de un cliente a otro sin tocar código.
+
+El límite de usuarios no está aquí: lo fija la licencia (domain/licensing.py), que el
+negocio no puede editar.
+"""
 
 from __future__ import annotations
 
@@ -24,15 +28,13 @@ class BusinessSettings:
     default_tax_rate: TaxRate = field(default_factory=lambda: TaxRate.of(19))
     allow_negative_stock: bool = False
     credit_sales_enabled: bool = True
-    max_users: int | None = 3
     receipt_footer: str = "¡Gracias por su compra!"
+    backup_folder: str = ""  # copia adicional de los respaldos (USB, OneDrive); vacío = solo en este equipo
     payment_methods: tuple[PaymentMethodConfig, ...] = DEFAULT_PAYMENT_METHODS
 
     def __post_init__(self) -> None:
         if not self.business_name.strip():
             raise ValidationError("El nombre del negocio es obligatorio")
-        if self.max_users is not None and self.max_users < 1:
-            raise ValidationError("El máximo de usuarios debe ser mayor que cero")
         try:
             ZoneInfo(self.timezone)
         except (ZoneInfoNotFoundError, ValueError):

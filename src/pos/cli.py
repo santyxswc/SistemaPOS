@@ -3,6 +3,8 @@
     start            (por defecto) inicia el sistema y abre el navegador; la primera vez lo prepara solo
     init             instalación desde la consola: configuración, base de datos y administrador
     create-admin     crea el primer administrador
+    reset-password   asigna una contraseña nueva a un usuario (soporte: el dueño la olvidó)
+    license          muestra el estado de la licencia o instala un código
     runserver        inicia solo el servidor (POS_ENV=development para modo desarrollo)
     backup           copia de seguridad de la base de datos
 """
@@ -150,6 +152,39 @@ def create_admin(args: argparse.Namespace) -> None:
     print("Ya puede iniciar sesión.")
 
 
+def _ask_new_password() -> str:
+    password = os.environ.get("POS_NEW_PASSWORD")  # soporte remoto sin teclado interactivo
+    if password:
+        return password
+    password = getpass.getpass("Contraseña nueva (mínimo 8 caracteres): ")
+    if password != getpass.getpass("Repita la contraseña: "):
+        sys.exit("Las contraseñas no coinciden")
+    return password
+
+
+def reset_password(args: argparse.Namespace) -> None:
+    username = args.username or input("Usuario al que se le cambia la contraseña: ").strip()
+    user = _container().reset_password_from_console.execute(username, _ask_new_password())
+    print(f"Listo: «{user.username}» ya puede entrar con la contraseña nueva.")
+    print("Si el sistema estaba bloqueado por intentos fallidos, ciérrelo y ábralo de nuevo.")
+
+
+def license_command(args: argparse.Namespace) -> None:
+    container = _container()
+    if args.code:
+        status = container.install_license.execute_from_console(args.code)
+        print("Licencia instalada.")
+    else:
+        status = container.get_license_status.execute()
+    print(status.message)
+    if status.license is not None:
+        print(f"  Negocio:  {status.license.business_name}")
+        print(f"  Plan:     {status.license.plan}")
+    print(f"  Usuarios: {status.max_users or 'sin límite'}")
+    if status.expires_on is not None:
+        print(f"  Vence:    {status.expires_on:%d/%m/%Y}")
+
+
 def runserver(args: argparse.Namespace) -> None:
     container = _container()
     host = args.host or container.config.host
@@ -168,11 +203,19 @@ def runserver(args: argparse.Namespace) -> None:
 
 def backup(args: argparse.Namespace) -> None:
     config = _config()
-    target_dir = Path(args.dir) if args.dir else Path(config.database_path).parent / "backups"
     if not Path(config.database_path).exists():
         sys.exit(f"No existe la base de datos {config.database_path}: inicie el sistema al menos una vez")
-    target = backup_database(config.database_path, target_dir, now=datetime.now(), keep=args.keep)
-    print(f"Respaldo creado: {target}")
+    if args.dir:  # copia puntual a otra carpeta, sin tocar las de siempre
+        target = backup_database(config.database_path, args.dir, now=datetime.now(), keep=args.keep)
+        print(f"Respaldo creado: {target}")
+        return
+    _log_to_file(data_root())  # la tarea programada no tiene consola: el registro dice si funcionó
+    result = build_container(config).run_backup.execute_unattended()
+    print(f"Respaldo creado: {result.file.name}")
+    if result.extra_copy:
+        print(f"Copia adicional: {result.extra_copy}")
+    if result.extra_error:
+        print(f"Aviso: {result.extra_error}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -195,6 +238,14 @@ def build_parser() -> argparse.ArgumentParser:
     admin.add_argument("--name", help="Nombre completo")
     admin.set_defaults(handler=create_admin)
 
+    reset = commands.add_parser("reset-password", help="Asigna una contraseña nueva (el dueño la olvidó)")
+    reset.add_argument("--username", help="Usuario (si no lo sabe, el error lista los administradores)")
+    reset.set_defaults(handler=reset_password)
+
+    lic = commands.add_parser("license", help="Estado de la licencia o instalación de un código")
+    lic.add_argument("code", nargs="?", help="Código de licencia enviado por el proveedor")
+    lic.set_defaults(handler=license_command)
+
     server = commands.add_parser("runserver", help="Inicia solo el servidor")
     server.add_argument("--host")
     server.add_argument("--port", type=int)
@@ -202,8 +253,9 @@ def build_parser() -> argparse.ArgumentParser:
     server.set_defaults(handler=runserver)
 
     copy = commands.add_parser("backup", help="Copia de seguridad de la base de datos")
-    copy.add_argument("--dir", help="Carpeta destino (por defecto data/backups)")
-    copy.add_argument("--keep", type=int, default=30, help="Cuántos respaldos conservar (por defecto 30)")
+    copy.add_argument("--dir", help="Carpeta destino para una copia puntual (por defecto data/backups y la carpeta "
+                      "adicional de Ajustes)")
+    copy.add_argument("--keep", type=int, default=30, help="Con --dir: cuántos respaldos conservar (por defecto 30)")
     copy.set_defaults(handler=backup)
     return parser
 

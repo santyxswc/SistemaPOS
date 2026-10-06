@@ -33,6 +33,35 @@ export function Modal(props: {
   );
 }
 
+/** Pregunta de sí o no con el estilo del sistema (en lugar del cuadro gris del navegador). */
+export function ConfirmDialog(props: {
+  title: string;
+  message: ReactNode;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal title={props.title} onClose={props.onCancel}>
+      <p>{props.message}</p>
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={props.onCancel}>
+          No, volver
+        </button>
+        <button
+          type="button"
+          className={`btn ${props.danger ? "btn-danger-solid" : "btn-primary"}`}
+          onClick={props.onConfirm}
+          autoFocus
+        >
+          {props.confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export function Field(props: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="field">

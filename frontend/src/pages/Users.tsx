@@ -4,13 +4,13 @@ import { type FormEvent, useState } from "react";
 import { api } from "../api";
 import { Empty, ErrorAlert, Field, Modal, formatDateTime, toUsername, toast, useAction, useLoad } from "../components/ui";
 import { useSession } from "../session";
-import type { Items, Role, User } from "../types";
-
-const ROLE_LABEL: Record<Role, string> = { admin: "Administrador", cashier: "Cajero" };
+import { type Items, type LicenseStatus, ROLE_LABEL, type Role, type User } from "../types";
 
 export function UsersPage() {
-  const { me, settings } = useSession();
+  const { me } = useSession();
   const users = useLoad(() => api.get<Items<User>>("/users"), []);
+  const license = useLoad(() => api.get<LicenseStatus>("/license"), []);
+  const maxUsers = license.data?.max_users ?? null;
   const [editing, setEditing] = useState<User | null | "new">(null);
   const active = users.data?.items.filter((user) => user.active).length ?? 0;
 
@@ -22,9 +22,9 @@ export function UsersPage() {
           Nuevo usuario
         </button>
       </div>
-      {settings.max_users !== null && (
+      {maxUsers !== null && (
         <p className="muted">
-          Su plan permite {settings.max_users} usuarios activos; hay {active}.
+          Su licencia permite {maxUsers} usuario{maxUsers === 1 ? "" : "s"} activo{maxUsers === 1 ? "" : "s"}; hay {active}.
         </p>
       )}
       <ErrorAlert error={users.error} />
@@ -128,6 +128,7 @@ function UserForm(props: { user: User | null; isSelf: boolean; onClose: () => vo
           <Field label="Rol">
             <select className="input" value={form.role} onChange={(e) => set({ role: e.target.value as Role })}>
               <option value="cashier">Cajero: vende, opera su caja y atiende clientes</option>
+              <option value="supervisor">Supervisor: además anula ventas, da descuentos, ve reportes y cierra cajas</option>
               <option value="admin">Administrador: acceso completo</option>
             </select>
           </Field>

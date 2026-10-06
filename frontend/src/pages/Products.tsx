@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { api } from "../api";
+import { ImportProductsDialog } from "../components/ImportProducts";
 import { Empty, ErrorAlert, Field, Modal, formatDateTime, toast, useAction, useLoad } from "../components/ui";
 import { centsToApi, formatMoney, formatQuantity, parseDecimal, thousandthsToApi, toCents } from "../money";
 import { useSession } from "../session";
@@ -25,10 +26,12 @@ const MOVEMENT_LABEL: Record<StockMovement["type"], string> = {
 type Dialog =
   | { kind: "product"; product: Product | null }
   | { kind: "category" }
+  | { kind: "import" }
   | { kind: "purchase" | "adjust" | "history"; product: Product };
 
 export function ProductsPage() {
   const { can } = useSession();
+  const exporting = useAction();
   const [text, setText] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -55,6 +58,16 @@ export function ProductsPage() {
         <h1>Productos</h1>
         {can("manage_catalog") && (
           <div className="row">
+            <button
+              className="btn"
+              disabled={exporting.busy}
+              onClick={() => exporting.run(() => api.download("/products/export", { include_inactive: showInactive }, "productos.xlsx"))}
+            >
+              Exportar a Excel
+            </button>
+            <button className="btn" onClick={() => setDialog({ kind: "import" })}>
+              Importar
+            </button>
             <button className="btn" onClick={() => setDialog({ kind: "category" })}>
               Nueva categoría
             </button>
@@ -81,7 +94,7 @@ export function ProductsPage() {
           inactivos
         </label>
       </div>
-      <ErrorAlert error={products.error} />
+      <ErrorAlert error={products.error ?? exporting.error} />
       <section className="card table-wrap">
         {!products.data?.items.length ? (
           <Empty>{products.loading ? "Cargando…" : "No hay productos que coincidan."}</Empty>
@@ -160,6 +173,16 @@ export function ProductsPage() {
           onSaved={() => {
             void categories.reload();
             saved("Categoría creada");
+          }}
+        />
+      )}
+      {dialog?.kind === "import" && (
+        <ImportProductsDialog
+          onClose={close}
+          onImported={(report) => {
+            void categories.reload();
+            const count = report.created + report.updated;
+            saved(`${count.toLocaleString("es-CO")} producto${count === 1 ? "" : "s"} importado${count === 1 ? "" : "s"}`);
           }}
         />
       )}

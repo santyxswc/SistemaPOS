@@ -7,7 +7,7 @@ name = "pos-system"
 version = "0.2.0"
 description = "Sistema POS modular para negocios pequeños (arquitectura limpia)"
 requires-python = ">=3.11"
-dependencies = ["Flask>=3.0,<4", "PyJWT>=2.7,<3", "waitress>=3.0,<4", "tzdata>=2024.1"]
+dependencies = ["Flask>=3.0,<4", "PyJWT>=2.7,<3", "waitress>=3.0,<4", "tzdata>=2024.1", "cryptography>=42"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]

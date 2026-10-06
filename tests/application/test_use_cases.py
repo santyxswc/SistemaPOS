@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+from pos.application.actor import Actor
 from pos.application.use_cases.customers import CreateCustomerCommand, RegisterCustomerPayment  # noqa: F401
 from pos.application.use_cases.sales import CreateSaleCommand, ListSalesQuery, PaymentInput, SaleItemInput
 from pos.application.use_cases.users import CreateUserCommand, UpdateUserCommand
@@ -98,6 +99,20 @@ class SalesFlowTests(PosTestCase):
         sale = self.sell(self.cashier, [(self.rice, "1")], [("efectivo", "2500")])
         with self.assertRaisesRegex(PermissionDenied, "anular"):
             self.c.void_sale.execute(self.cashier, sale.id, "Error")
+
+    def test_supervisor_corrects_the_shift_but_does_not_run_the_business(self):
+        supervisor = Actor.from_user(self.c.create_user.execute(self.admin, CreateUserCommand(
+            username="encargado", full_name="Encargada", password=ADMIN_PASSWORD, role=Role.SUPERVISOR)))
+        self.open_cash(self.cashier)
+        sale = self.sell(self.cashier, [(self.rice, "1")], [("efectivo", "2500")])
+
+        self.c.void_sale.execute(supervisor, sale.id, "Cobró dos veces")  # puede anular la venta de otro
+        self.c.close_cash_session.execute(supervisor, counted_amount=Money.of("50000"),
+                                          session_id=self.c.get_current_cash_session.execute(self.cashier).session.id)
+        with self.assertRaises(PermissionDenied):
+            self.c.update_settings.execute(supervisor, {"business_name": "Otro"})
+        with self.assertRaises(PermissionDenied):
+            self.c.update_product.execute(supervisor, self.rice.id, {"price": Money.of("1")})
 
     def test_void_restores_stock_and_cash(self):
         self.open_cash(self.cashier, "50000")

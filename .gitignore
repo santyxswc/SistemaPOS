@@ -15,3 +15,6 @@ build/
 # Interfaz compilada (se genera con: cd frontend && npm run build)
 src/pos/presentation/web/static/
 node_modules/
+
+# Claves privadas (la de licencias nunca va al repositorio)
+*.pem

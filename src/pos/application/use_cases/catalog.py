@@ -17,7 +17,7 @@ from ..common import get_or_404, page_size, require_settings
 from ..ports import Clock, UnitOfWork, UnitOfWorkFactory
 
 
-def _ensure_unique_codes(uow: UnitOfWork, product: Product) -> None:
+def ensure_unique_codes(uow: UnitOfWork, product: Product) -> None:
     same_sku = uow.products.get_by_sku(product.sku)
     if same_sku is not None and same_sku.id != product.id:
         raise ConflictError(f"Ya existe un producto con el SKU {product.sku}")
@@ -27,7 +27,7 @@ def _ensure_unique_codes(uow: UnitOfWork, product: Product) -> None:
             raise ConflictError(f"Ya existe un producto con el código de barras {product.barcode}")
 
 
-def _ensure_category(uow: UnitOfWork, category_id: UUID | None) -> None:
+def ensure_category(uow: UnitOfWork, category_id: UUID | None) -> None:
     if category_id is None:
         return
     category = uow.categories.get(category_id)
@@ -97,8 +97,8 @@ class CreateProduct:
                 min_stock=command.min_stock,
                 created_at=now,
             )
-            _ensure_unique_codes(uow, product)
-            _ensure_category(uow, product.category_id)
+            ensure_unique_codes(uow, product)
+            ensure_category(uow, product.category_id)
 
             initial = to_quantity(command.initial_stock, "stock inicial")
             if initial < 0:
@@ -137,9 +137,9 @@ class UpdateProduct:
         with self._uow() as uow:
             product = get_or_404(uow.products.get(product_id), "Producto no encontrado")
             product.update(at=self._clock.now(), **changes)
-            _ensure_unique_codes(uow, product)
+            ensure_unique_codes(uow, product)
             if "category_id" in changes:
-                _ensure_category(uow, product.category_id)
+                ensure_category(uow, product.category_id)
             uow.products.save(product)
             uow.commit()
         return product
@@ -192,3 +192,24 @@ class SearchProducts:
                 limit=page_size(limit),
                 offset=max(0, offset),
             )
+
+
+@dataclass(frozen=True)
+class CatalogExport:
+    products: list[Product]
+    category_names: dict[UUID, str]
+
+
+class ExportCatalog:
+    """Todo el catálogo para Excel, con los mismos encabezados que entiende la importación:
+    se exporta, se cambian precios en Excel y se vuelve a importar."""
+
+    def __init__(self, uow: UnitOfWorkFactory) -> None:
+        self._uow = uow
+
+    def execute(self, actor: Actor, *, include_inactive: bool = False) -> CatalogExport:
+        actor.require(Permission.MANAGE_CATALOG)  # incluye costos: no es para cualquier usuario
+        with self._uow(read_only=True) as uow:
+            products = uow.products.list_all(include_inactive=include_inactive)
+            categories = uow.categories.list_all(include_inactive=True)
+        return CatalogExport(products=products, category_names={c.id: c.name for c in categories})

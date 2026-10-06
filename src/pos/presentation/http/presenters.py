@@ -8,13 +8,16 @@ from typing import Any
 from uuid import UUID
 
 from ...application.actor import Actor
+from ...application.ports import BackupFile, BackupResult
 from ...application.use_cases.cash import CashSessionReport
+from ...application.use_cases.catalog_import import ProductImportReport
 from ...application.use_cases.customers import CustomerStatement
 from ...application.use_cases.reports import PaymentTotal, ProductSales, SalesSummary
 from ...domain.cash import CashMovement, CashSession
 from ...domain.catalog import Category, Product
 from ...domain.customers import Customer, LedgerEntry
 from ...domain.inventory import StockMovement
+from ...domain.licensing import LicenseStatus
 from ...domain.sales import Sale
 from ...domain.settings import BusinessSettings
 from ...domain.shared.values import Money, format_quantity
@@ -72,12 +75,56 @@ def settings(value: BusinessSettings) -> Json:
         "default_tax_rate": str(value.default_tax_rate),
         "allow_negative_stock": value.allow_negative_stock,
         "credit_sales_enabled": value.credit_sales_enabled,
-        "max_users": value.max_users,
         "receipt_footer": value.receipt_footer,
+        "backup_folder": value.backup_folder,
         "payment_methods": [
             {"code": m.code, "name": m.name, "kind": m.kind.value, "active": m.active}
             for m in value.payment_methods
         ],
+    }
+
+
+def license_status(value: LicenseStatus) -> Json:
+    license = value.license
+    return {
+        "state": value.state.value,
+        "valid": value.is_valid,
+        "needs_attention": value.needs_attention,
+        "message": value.message,
+        "max_users": value.max_users,
+        "expires_on": value.expires_on.isoformat() if value.expires_on else None,
+        "days_left": value.days_left,
+        "license": None
+        if license is None
+        else {
+            "id": license.license_id,
+            "business_name": license.business_name,
+            "plan": license.plan,
+            "max_users": license.max_users,
+            "issued_on": license.issued_on.isoformat(),
+            "expires_on": license.expires_on.isoformat() if license.expires_on else None,
+        },
+    }
+
+
+def backup_file(value: BackupFile) -> Json:
+    return {"name": value.name, "created_at": ts(value.created_at), "size_bytes": value.size_bytes}
+
+
+def backup_result(value: BackupResult) -> Json:
+    return {"file": backup_file(value.file), "extra_copy": value.extra_copy, "extra_error": value.extra_error}
+
+
+def import_report(value: ProductImportReport) -> Json:
+    return {
+        "dry_run": value.dry_run,
+        "total_rows": value.total_rows,
+        "created": value.created,
+        "updated": value.updated,
+        "unchanged": value.unchanged,
+        "skipped_existing": value.skipped_existing,
+        "new_categories": value.new_categories,
+        "errors": [{"line": issue.line, "message": issue.message} for issue in value.errors],
     }
 
 

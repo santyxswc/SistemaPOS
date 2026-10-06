@@ -7,16 +7,28 @@ y agrupa, así un reporte de un año no carga cada venta en memoria.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, tzinfo
 
 from ...domain.shared.errors import ValidationError
 from ...domain.shared.values import Money
 from ...domain.users import Permission
 from ..actor import Actor
 from ..common import local_day_range, require_settings
-from ..ports import PaymentTotal, ProductSales, SalesFilter, UnitOfWorkFactory
+from ..ports import PaymentTotal, ProductSales, SaleRow, SalesFilter, UnitOfWorkFactory
 
-__all__ = ["GetSalesSummary", "GetTopProducts", "PaymentTotal", "PeriodTotal", "ProductSales", "SalesSummary"]
+__all__ = [
+    "ExportSalesReport",
+    "GetSalesSummary",
+    "GetTopProducts",
+    "PaymentTotal",
+    "PeriodTotal",
+    "ProductSales",
+    "SaleRow",
+    "SalesReportExport",
+    "SalesSummary",
+]
+
+MAX_EXPORTED_SALES = 100_000
 
 
 @dataclass(frozen=True)
@@ -95,3 +107,30 @@ class GetTopProducts:
             settings = require_settings(uow)
             start, end = local_day_range(date_from, date_to, settings.tzinfo)
             return uow.sales_reports.top_products(SalesFilter(start=start, end=end), max(1, min(limit, 100)))
+
+
+@dataclass(frozen=True)
+class SalesReportExport:
+    summary: SalesSummary
+    sales: list[SaleRow]
+    products: list[ProductSales]
+    timezone: tzinfo
+
+
+class ExportSalesReport:
+    """Lo que pide el contador: resumen, cada venta con sus impuestos y lo vendido por producto."""
+
+    def __init__(self, uow: UnitOfWorkFactory, summary: GetSalesSummary) -> None:
+        self._uow = uow
+        self._summary = summary
+
+    def execute(self, actor: Actor, date_from: date, date_to: date) -> SalesReportExport:
+        actor.require(Permission.VIEW_REPORTS)
+        summary = self._summary.execute(actor, date_from, date_to, group_by="day")
+        with self._uow(read_only=True) as uow:
+            settings = require_settings(uow)
+            start, end = local_day_range(date_from, date_to, settings.tzinfo)
+            where = SalesFilter(start=start, end=end)
+            sales = uow.sales_reports.sale_rows(where, MAX_EXPORTED_SALES)
+            products = uow.sales_reports.top_products(where, 100_000)
+        return SalesReportExport(summary=summary, sales=sales, products=products, timezone=settings.tzinfo)

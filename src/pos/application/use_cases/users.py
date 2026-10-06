@@ -5,20 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from ...domain.shared.errors import AuthenticationError, BusinessRuleViolation, ConflictError
+from ...domain.shared.errors import AuthenticationError, BusinessRuleViolation, ConflictError, NotFoundError
 from ...domain.users import Permission, Role, User, normalize_username, validate_password
 from ..actor import Actor
 from ..common import get_or_404, require_settings
-from ..ports import Clock, LoginThrottle, PasswordHasher, TokenService, UnitOfWork, UnitOfWorkFactory
+from ..ports import Clock, LoginThrottle, PasswordHasher, TokenService, UnitOfWorkFactory
+from .licensing import LicensePolicy
 
 _INVALID_CREDENTIALS = "Usuario o contraseña incorrectos"
-
-
-def _ensure_user_quota(uow: UnitOfWork, max_users: int | None) -> None:
-    if max_users is not None and uow.users.count(active_only=True) >= max_users:
-        raise BusinessRuleViolation(
-            f"El plan permite hasta {max_users} usuarios activos: desactive uno o amplíe el plan"
-        )
 
 
 @dataclass(frozen=True)
@@ -111,17 +105,19 @@ class CreateUserCommand:
 
 
 class CreateUser:
-    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, clock: Clock) -> None:
+    def __init__(
+        self, uow: UnitOfWorkFactory, hasher: PasswordHasher, clock: Clock, license_policy: LicensePolicy
+    ) -> None:
         self._uow = uow
         self._hasher = hasher
         self._clock = clock
+        self._license = license_policy
 
     def execute(self, actor: Actor, command: CreateUserCommand) -> User:
         actor.require(Permission.MANAGE_USERS)
         validate_password(command.password)
         password_hash = self._hasher.hash(command.password)
         with self._uow() as uow:
-            settings = require_settings(uow)
             user = User(
                 username=command.username,
                 full_name=command.full_name,
@@ -131,7 +127,7 @@ class CreateUser:
             )
             if uow.users.get_by_username(user.username) is not None:
                 raise ConflictError(f"El usuario «{user.username}» ya existe")
-            _ensure_user_quota(uow, settings.max_users)
+            self._license.ensure_user_quota(uow)
             uow.users.add(user)
             uow.commit()
         return user
@@ -146,9 +142,10 @@ class UpdateUserCommand:
 
 
 class UpdateUser:
-    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, license_policy: LicensePolicy) -> None:
         self._uow = uow
         self._hasher = hasher
+        self._license = license_policy
 
     def execute(self, actor: Actor, user_id: UUID, command: UpdateUserCommand) -> User:
         actor.require(Permission.MANAGE_USERS)
@@ -162,7 +159,7 @@ class UpdateUser:
             if user.id == actor.user_id and (command.active is False or demoting_self):
                 raise BusinessRuleViolation("No puede desactivarse ni quitarse el rol de administrador a sí mismo")
             if command.active and not user.active:
-                _ensure_user_quota(uow, require_settings(uow).max_users)
+                self._license.ensure_user_quota(uow)
             user.update(
                 full_name=command.full_name,
                 role=command.role,
@@ -191,6 +188,35 @@ class ChangeOwnPassword:
             user.update(password_hash=new_hash)
             uow.users.save(user)
             uow.commit()
+
+
+class ResetPasswordFromConsole:
+    """Recupera el acceso cuando el dueño olvida su contraseña.
+
+    Solo se ofrece en la consola del computador del negocio, nunca por la API: quien
+    puede ejecutar comandos en ese equipo ya tiene la base de datos en sus manos, así
+    que no hay un permiso adicional que pedir. Reactiva la cuenta si estaba inactiva.
+    """
+
+    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, license_policy: LicensePolicy) -> None:
+        self._uow = uow
+        self._hasher = hasher
+        self._license = license_policy
+
+    def execute(self, username: str, new_password: str) -> User:
+        validate_password(new_password)
+        password_hash = self._hasher.hash(new_password)
+        with self._uow() as uow:
+            user = uow.users.get_by_username(normalize_username(username))
+            if user is None:
+                admins = ", ".join(u.username for u in uow.users.list_all() if u.role is Role.ADMIN) or "ninguno"
+                raise NotFoundError(f"No existe el usuario «{username}». Administradores registrados: {admins}")
+            if not user.active:
+                self._license.ensure_user_quota(uow)
+            user.update(password_hash=password_hash, active=True)
+            uow.users.save(user)
+            uow.commit()
+        return user
 
 
 class ListUsers:

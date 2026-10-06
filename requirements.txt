@@ -2,3 +2,4 @@ Flask>=3.0,<4
 PyJWT>=2.7,<3
 waitress>=3.0,<4
 tzdata>=2024.1  # zonas horarias en Windows
+cryptography>=42  # firma de licencias (Ed25519)

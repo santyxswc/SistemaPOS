@@ -18,6 +18,7 @@ from .repositories import (
     SqliteCategoryRepository,
     SqliteCustomerRepository,
     SqliteLedgerRepository,
+    SqliteLicenseRepository,
     SqliteProductRepository,
     SqliteSaleRepository,
     SqliteSequenceRepository,
@@ -42,6 +43,7 @@ class SqliteUnitOfWork(UnitOfWork):
             conn.execute("BEGIN IMMEDIATE")
         self._conn = conn
         self.settings = SqliteSettingsRepository(conn)
+        self.licensing = SqliteLicenseRepository(conn)
         self.sequences = SqliteSequenceRepository(conn)
         self.users = SqliteUserRepository(conn, self.track)
         self.categories = SqliteCategoryRepository(conn)

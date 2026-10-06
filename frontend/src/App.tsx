@@ -1,5 +1,6 @@
 import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken, setUnauthorizedHandler } from "./api";
+import { LicenseBanner } from "./components/License";
 import { Toaster } from "./components/ui";
 import { CashPage } from "./pages/Cash";
 import { CustomersPage } from "./pages/Customers";
@@ -12,7 +13,7 @@ import { SettingsPage } from "./pages/Settings";
 import { SetupPage } from "./pages/Setup";
 import { ChangePasswordModal, UsersPage } from "./pages/Users";
 import { type Session, SessionContext } from "./session";
-import type { Me, Permission, Settings } from "./types";
+import { type Me, type Permission, ROLE_LABEL, type Settings } from "./types";
 
 interface Route {
   path: string;
@@ -160,7 +161,7 @@ function Shell(props: { me: Me; settings: Settings; logout: () => void; reloadSe
           <div className="sidebar-footer">
             <div>{me.full_name}</div>
             <div className="small" style={{ opacity: 0.75 }}>
-              {me.role === "admin" ? "Administrador" : "Cajero"}
+              {ROLE_LABEL[me.role]}
             </div>
             <button className="btn btn-sm" onClick={() => setChangingPassword(true)}>
               Mi contraseña
@@ -171,6 +172,7 @@ function Shell(props: { me: Me; settings: Settings; logout: () => void; reloadSe
           </div>
         </nav>
         <main className="main">
+          {session.can("manage_settings") && <LicenseBanner onOpenSettings={() => navigate("ajustes")} />}
           <Page key={current.path} />
         </main>
       </div>

@@ -212,7 +212,6 @@ function CloseModal(props: { report: CashReport; onClose: () => void; onClosed: 
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!window.confirm("Después de cerrar no podrá registrar más ventas en esta caja. ¿Cerrar?")) return;
     const report = await run(() =>
       api.post<CashReport>("/cash-sessions/current/close", { counted_amount: centsToApi(toCents(counted)), note }),
     );
@@ -225,7 +224,7 @@ function CloseModal(props: { report: CashReport; onClose: () => void; onClosed: 
         <ErrorAlert error={error} />
         <p>
           El sistema espera <strong>{formatMoney(expected)}</strong> en efectivo. Cuente el dinero del cajón y escriba el
-          total.
+          total. Después de cerrar no podrá registrar más ventas en esta caja.
         </p>
         <Field label="Efectivo contado">
           <input className="input input-big" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} autoFocus required />

@@ -17,6 +17,7 @@ MIN_PASSWORD_LENGTH = 8
 
 class Role(StrEnum):
     ADMIN = "admin"
+    SUPERVISOR = "supervisor"
     CASHIER = "cashier"
 
 
@@ -52,17 +53,30 @@ PERMISSION_LABELS: dict[Permission, str] = {
     Permission.VIEW_REPORTS: "ver reportes",
 }
 
-# Único lugar donde se decide qué puede hacer cada rol; se ajusta por negocio.
+_CASHIER = frozenset(
+    {
+        Permission.SELL,
+        Permission.OPERATE_CASH,
+        Permission.MANAGE_CUSTOMERS,
+        Permission.COLLECT_PAYMENTS,
+    }
+)
+
+# Único lugar donde se decide qué puede hacer cada rol.
+# El supervisor (encargado del turno) corrige y controla, pero no cambia precios,
+# usuarios ni la configuración del negocio.
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.ADMIN: frozenset(Permission),
-    Role.CASHIER: frozenset(
-        {
-            Permission.SELL,
-            Permission.OPERATE_CASH,
-            Permission.MANAGE_CUSTOMERS,
-            Permission.COLLECT_PAYMENTS,
-        }
-    ),
+    Role.SUPERVISOR: _CASHIER
+    | {
+        Permission.APPLY_DISCOUNTS,
+        Permission.VOID_SALES,
+        Permission.SUPERVISE_CASH,
+        Permission.GRANT_CREDIT,
+        Permission.MANAGE_INVENTORY,
+        Permission.VIEW_REPORTS,
+    },
+    Role.CASHIER: _CASHIER,
 }
 
 

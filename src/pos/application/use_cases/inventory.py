@@ -89,7 +89,7 @@ class ListLowStock:
         self._uow = uow
 
     def execute(self) -> list[Product]:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return uow.products.list_low_stock()
 
 
@@ -99,6 +99,6 @@ class ListStockMovements:
 
     def execute(self, actor: Actor, product_id: UUID, limit: int = 50) -> list[StockMovement]:
         actor.require(Permission.MANAGE_INVENTORY)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             get_or_404(uow.products.get(product_id), "Producto no encontrado")
             return uow.stock_movements.list_for_product(product_id, limit=page_size(limit))

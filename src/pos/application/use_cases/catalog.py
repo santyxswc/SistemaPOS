@@ -55,7 +55,7 @@ class ListCategories:
         self._uow = uow
 
     def execute(self, include_inactive: bool = False) -> list[Category]:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return uow.categories.list_all(include_inactive=include_inactive)
 
 
@@ -150,7 +150,7 @@ class GetProduct:
         self._uow = uow
 
     def execute(self, product_id: UUID) -> Product:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return get_or_404(uow.products.get(product_id), "Producto no encontrado")
 
 
@@ -164,7 +164,7 @@ class FindProductByCode:
         cleaned = (code or "").strip()
         if not cleaned:
             raise ValidationError("Escriba o escanee un código")
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             product = uow.products.get_by_barcode(cleaned) or uow.products.get_by_sku(cleaned.upper())
         if product is None or not product.active:
             raise NotFoundError(f"No hay un producto activo con el código {cleaned}")
@@ -184,7 +184,7 @@ class SearchProducts:
         limit: int = 50,
         offset: int = 0,
     ) -> list[Product]:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return uow.products.search(
                 text=text,
                 category_id=category_id,

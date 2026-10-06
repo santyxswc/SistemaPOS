@@ -229,7 +229,7 @@ class GetSale:
         self._uow = uow
 
     def execute(self, actor: Actor, sale_id: UUID) -> Sale:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             sale = get_or_404(uow.sales.get(sale_id), "Venta no encontrada")
         if sale.cashier_id != actor.user_id:
             actor.require(Permission.VIEW_REPORTS)
@@ -256,7 +256,7 @@ class ListSales:
         if not actor.can(Permission.VIEW_REPORTS):
             actor.require(Permission.SELL)
             cashier_id = actor.user_id
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             settings = require_settings(uow)
             start, end = local_day_range(query.date_from, query.date_to, settings.tzinfo)
             return uow.sales.find(

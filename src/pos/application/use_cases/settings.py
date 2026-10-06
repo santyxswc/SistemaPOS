@@ -32,7 +32,7 @@ class GetSettings:
         self._uow = uow
 
     def execute(self) -> BusinessSettings:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return require_settings(uow)
 
 

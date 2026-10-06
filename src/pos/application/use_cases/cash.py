@@ -64,7 +64,7 @@ class GetCurrentCashSession:
         self._uow = uow
 
     def execute(self, actor: Actor) -> CashSessionReport:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             session = uow.cash_sessions.get_open_for_cashier(actor.user_id)
             if session is None:
                 raise NotFoundError("No tiene una caja abierta")
@@ -123,7 +123,7 @@ class GetCashSessionReport:
         self._uow = uow
 
     def execute(self, actor: Actor, session_id: UUID) -> CashSessionReport:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             session = get_or_404(uow.cash_sessions.get(session_id), "Caja no encontrada")
             if session.cashier_id != actor.user_id:
                 actor.require(Permission.SUPERVISE_CASH)
@@ -136,5 +136,5 @@ class ListCashSessions:
 
     def execute(self, actor: Actor, limit: int = 30, offset: int = 0) -> list[CashSession]:
         actor.require(Permission.SUPERVISE_CASH)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return uow.cash_sessions.list_recent(limit=page_size(limit), offset=max(0, offset))

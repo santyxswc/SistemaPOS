@@ -36,7 +36,7 @@ class Login:
         self._dummy_hash: str | None = None
 
     def execute(self, username: str, password: str) -> LoginResult:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             user = uow.users.get_by_username(normalize_username(username))
         if user is None or not user.active:
             # Mismo trabajo exista o no el usuario: no se puede adivinar quién existe por el tiempo.
@@ -61,7 +61,7 @@ class ResolveActor:
 
     def execute(self, token: str) -> Actor:
         user_id = self._tokens.decode(token)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             user = uow.users.get(user_id)
         if user is None or not user.active:
             raise AuthenticationError("Sesión no válida: inicie sesión de nuevo")
@@ -173,7 +173,7 @@ class ChangeOwnPassword:
 
     def execute(self, actor: Actor, current_password: str, new_password: str) -> None:
         validate_password(new_password)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             user = get_or_404(uow.users.get(actor.user_id), "Usuario no encontrado")
         if not self._hasher.verify(current_password, user.password_hash):
             raise AuthenticationError("La contraseña actual no es correcta")
@@ -191,5 +191,5 @@ class ListUsers:
 
     def execute(self, actor: Actor) -> list[User]:
         actor.require(Permission.MANAGE_USERS)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return uow.users.list_all()

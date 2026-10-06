@@ -75,7 +75,7 @@ class GetSalesSummary:
         actor.require(Permission.VIEW_REPORTS)
         if group_by not in _PERIOD_FORMATS:
             raise ValidationError("Agrupe por 'day' (día) o 'month' (mes)")
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             settings = require_settings(uow)
             start, end = local_day_range(date_from, date_to, settings.tzinfo)
             sales = uow.sales.find(start=start, end=end)
@@ -119,7 +119,7 @@ class GetTopProducts:
 
     def execute(self, actor: Actor, date_from: date, date_to: date, limit: int = 10) -> list[ProductSales]:
         actor.require(Permission.VIEW_REPORTS)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             settings = require_settings(uow)
             start, end = local_day_range(date_from, date_to, settings.tzinfo)
             sales = uow.sales.find(start=start, end=end)

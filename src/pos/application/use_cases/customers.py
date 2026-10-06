@@ -83,7 +83,7 @@ class GetCustomer:
         self._uow = uow
 
     def execute(self, customer_id: UUID) -> Customer:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return get_or_404(uow.customers.get(customer_id), "Cliente no encontrado")
 
 
@@ -94,7 +94,7 @@ class SearchCustomers:
     def execute(
         self, *, text: str | None = None, include_inactive: bool = False, limit: int = 50, offset: int = 0
     ) -> list[Customer]:
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             return uow.customers.search(
                 text=text, include_inactive=include_inactive, limit=page_size(limit), offset=max(0, offset)
             )
@@ -112,7 +112,7 @@ class GetCustomerStatement:
 
     def execute(self, actor: Actor, customer_id: UUID, limit: int = 50) -> CustomerStatement:
         actor.require(Permission.COLLECT_PAYMENTS)
-        with self._uow() as uow:
+        with self._uow(read_only=True) as uow:
             customer = get_or_404(uow.customers.get(customer_id), "Cliente no encontrado")
             entries = uow.ledger.list_for_customer(customer_id, limit=page_size(limit))
         return CustomerStatement(customer=customer, entries=entries)

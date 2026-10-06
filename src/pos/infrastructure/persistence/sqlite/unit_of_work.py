@@ -1,7 +1,9 @@
 """Unidad de trabajo SQLite.
 
-Cada operación abre su conexión con BEGIN IMMEDIATE: las escrituras quedan en fila
-y dos cajeros nunca venden la misma última unidad de un producto.
+Cada operación de escritura abre su conexión con BEGIN IMMEDIATE: las escrituras
+quedan en fila y dos cajeros nunca venden la misma última unidad de un producto.
+Las consultas usan una transacción de solo lectura que, en modo WAL, ve una foto
+consistente de los datos sin bloquear ni esperar a quien escribe.
 """
 
 from __future__ import annotations
@@ -25,14 +27,18 @@ from .repositories import (
 
 
 class SqliteUnitOfWork(UnitOfWork):
-    def __init__(self, database: str, publisher: EventPublisher | None = None) -> None:
-        super().__init__(publisher)
+    def __init__(self, database: str, publisher: EventPublisher | None = None, *, read_only: bool = False) -> None:
+        super().__init__(publisher, read_only=read_only)
         self._database = database
         self._conn: sqlite3.Connection | None = None
 
     def __enter__(self) -> SqliteUnitOfWork:
         conn = connect(self._database)
-        conn.execute("BEGIN IMMEDIATE")
+        if self.read_only:
+            conn.execute("PRAGMA query_only = ON")  # la base de datos rechaza cualquier escritura
+            conn.execute("BEGIN")
+        else:
+            conn.execute("BEGIN IMMEDIATE")
         self._conn = conn
         self.settings = SqliteSettingsRepository(conn)
         self.sequences = SqliteSequenceRepository(conn)

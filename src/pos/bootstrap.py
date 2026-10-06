@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .application.event_handlers import ElectronicInvoicingHandler, log_low_stock
-from .application.ports import Clock, InvoiceProvider
+from .application.ports import Clock, InvoiceProvider, UnitOfWorkFactory
 from .application.use_cases import cash, catalog, customers, inventory, reports, sales, settings, users
 from .config import AppConfig
 from .domain.catalog import StockLow
@@ -25,6 +25,7 @@ from .infrastructure.security import JwtTokenService, Pbkdf2PasswordHasher
 @dataclass(frozen=True)
 class Container:
     config: AppConfig
+    uow_factory: UnitOfWorkFactory
     # acceso y usuarios
     login: users.Login
     resolve_actor: users.ResolveActor
@@ -87,8 +88,8 @@ def build_container(
 
     migrate(config.database_path)
 
-    def uow() -> SqliteUnitOfWork:
-        return SqliteUnitOfWork(config.database_path, bus)
+    def uow(*, read_only: bool = False) -> SqliteUnitOfWork:
+        return SqliteUnitOfWork(config.database_path, bus, read_only=read_only)
 
     hasher = Pbkdf2PasswordHasher(config.password_iterations)
     tokens = JwtTokenService(config.secret_key, config.token_ttl_minutes, clock)
@@ -96,6 +97,7 @@ def build_container(
 
     return Container(
         config=config,
+        uow_factory=uow,
         login=users.Login(uow, hasher, tokens),
         resolve_actor=users.ResolveActor(uow, tokens),
         bootstrap_admin=users.BootstrapAdmin(uow, hasher, clock),

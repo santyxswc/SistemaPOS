@@ -8,7 +8,7 @@ facturación electrónica es escribir un adaptador nuevo, sin tocar las reglas.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -198,9 +198,10 @@ class UnitOfWork(ABC):
     cash_sessions: CashSessionRepository
     sales: SaleRepository
 
-    def __init__(self, publisher: EventPublisher | None = None) -> None:
+    def __init__(self, publisher: EventPublisher | None = None, *, read_only: bool = False) -> None:
         self._publisher = publisher
         self._tracked: list[AggregateRoot] = []
+        self.read_only = read_only
 
     def __enter__(self) -> UnitOfWork:
         return self
@@ -213,6 +214,8 @@ class UnitOfWork(ABC):
             self._tracked.append(aggregate)
 
     def commit(self) -> None:
+        if self.read_only:
+            raise RuntimeError("Una unidad de trabajo de solo lectura no puede confirmar cambios")
         self._commit()
         events = [event for aggregate in self._tracked for event in aggregate.pull_events()]
         self._tracked.clear()
@@ -226,4 +229,11 @@ class UnitOfWork(ABC):
     def rollback(self) -> None: ...
 
 
-UnitOfWorkFactory = Callable[[], UnitOfWork]
+class UnitOfWorkFactory(Protocol):
+    """Abre una unidad de trabajo.
+
+    Las consultas piden `read_only=True`: no toman el candado de escritura, así que
+    los reportes y las búsquedas nunca hacen esperar a quien está vendiendo.
+    """
+
+    def __call__(self, *, read_only: bool = False) -> UnitOfWork: ...

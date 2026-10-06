@@ -1,0 +1,262 @@
+"""Convierte objetos del dominio en JSON. El dinero viaja como texto ("12500.00") para no perder exactitud."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from ...application.actor import Actor
+from ...application.use_cases.cash import CashSessionReport
+from ...application.use_cases.customers import CustomerStatement
+from ...application.use_cases.reports import PaymentTotal, ProductSales, SalesSummary
+from ...domain.cash import CashMovement, CashSession
+from ...domain.catalog import Category, Product
+from ...domain.customers import Customer, LedgerEntry
+from ...domain.inventory import StockMovement
+from ...domain.sales import Sale
+from ...domain.settings import BusinessSettings
+from ...domain.shared.values import Money, format_quantity
+from ...domain.users import User
+
+Json = dict[str, Any]
+
+
+def money(value: Money | None) -> str | None:
+    return None if value is None else str(value.amount)
+
+
+def quantity(value: Decimal | None) -> str | None:
+    return None if value is None else format_quantity(value)
+
+
+def ts(value: datetime | None) -> str | None:
+    return None if value is None else value.isoformat()
+
+
+def uid(value: UUID | None) -> str | None:
+    return None if value is None else str(value)
+
+
+def user(value: User) -> Json:
+    return {
+        "id": uid(value.id),
+        "username": value.username,
+        "full_name": value.full_name,
+        "role": value.role.value,
+        "active": value.active,
+        "created_at": ts(value.created_at),
+    }
+
+
+def actor(value: Actor) -> Json:
+    return {
+        "id": uid(value.user_id),
+        "username": value.username,
+        "full_name": value.full_name,
+        "role": value.role.value,
+        "permissions": sorted(permission.value for permission in value.permissions),
+    }
+
+
+def settings(value: BusinessSettings) -> Json:
+    return {
+        "business_name": value.business_name,
+        "tax_id": value.tax_id,
+        "address": value.address,
+        "phone": value.phone,
+        "currency": value.currency,
+        "timezone": value.timezone,
+        "prices_include_tax": value.prices_include_tax,
+        "default_tax_rate": str(value.default_tax_rate),
+        "allow_negative_stock": value.allow_negative_stock,
+        "credit_sales_enabled": value.credit_sales_enabled,
+        "max_users": value.max_users,
+        "receipt_footer": value.receipt_footer,
+        "payment_methods": [
+            {"code": m.code, "name": m.name, "kind": m.kind.value, "active": m.active}
+            for m in value.payment_methods
+        ],
+    }
+
+
+def category(value: Category) -> Json:
+    return {"id": uid(value.id), "name": value.name, "active": value.active}
+
+
+def product(value: Product) -> Json:
+    return {
+        "id": uid(value.id),
+        "sku": value.sku,
+        "barcode": value.barcode,
+        "name": value.name,
+        "category_id": uid(value.category_id),
+        "price": money(value.price),
+        "cost": money(value.cost),
+        "tax_rate": str(value.tax_rate),
+        "unit": value.unit.value,
+        "track_stock": value.track_stock,
+        "stock": quantity(value.stock),
+        "min_stock": quantity(value.min_stock),
+        "is_low_stock": value.is_low_stock,
+        "active": value.active,
+        "updated_at": ts(value.updated_at),
+    }
+
+
+def stock_movement(value: StockMovement) -> Json:
+    return {
+        "id": uid(value.id),
+        "product_id": uid(value.product_id),
+        "type": value.type.value,
+        "quantity": quantity(value.quantity),
+        "stock_after": quantity(value.stock_after),
+        "unit_cost": money(value.unit_cost),
+        "reference": value.reference,
+        "note": value.note,
+        "user_id": uid(value.user_id),
+        "created_at": ts(value.created_at),
+    }
+
+
+def customer(value: Customer) -> Json:
+    return {
+        "id": uid(value.id),
+        "name": value.name,
+        "document": value.document,
+        "phone": value.phone,
+        "email": value.email,
+        "address": value.address,
+        "credit_limit": money(value.credit_limit),
+        "balance": money(value.balance),
+        "available_credit": money(value.available_credit),
+        "active": value.active,
+    }
+
+
+def ledger_entry(value: LedgerEntry) -> Json:
+    return {
+        "id": uid(value.id),
+        "type": value.type.value,
+        "amount": money(value.amount),
+        "balance_after": money(value.balance_after),
+        "sale_id": uid(value.sale_id),
+        "note": value.note,
+        "user_id": uid(value.user_id),
+        "created_at": ts(value.created_at),
+    }
+
+
+def customer_statement(value: CustomerStatement) -> Json:
+    return {"customer": customer(value.customer), "entries": [ledger_entry(e) for e in value.entries]}
+
+
+def cash_movement(value: CashMovement) -> Json:
+    return {
+        "id": uid(value.id),
+        "type": value.type.value,
+        "amount": money(value.amount),
+        "reference": value.reference,
+        "note": value.note,
+        "user_id": uid(value.user_id),
+        "created_at": ts(value.created_at),
+    }
+
+
+def cash_session(value: CashSession) -> Json:
+    return {
+        "id": uid(value.id),
+        "cashier_id": uid(value.cashier_id),
+        "status": value.status.value,
+        "opening_amount": money(value.opening_amount),
+        "expected_cash": money(value.expected_cash),
+        "counted_amount": money(value.counted_amount),
+        "difference": money(value.difference),
+        "opened_at": ts(value.opened_at),
+        "closed_at": ts(value.closed_at),
+        "closing_note": value.closing_note,
+        "movements": [cash_movement(m) for m in value.movements],
+    }
+
+
+def payment_total(value: PaymentTotal) -> Json:
+    return {"method": value.code, "name": value.name, "kind": value.kind.value, "amount": money(value.amount)}
+
+
+def cash_report(value: CashSessionReport) -> Json:
+    return {
+        "session": cash_session(value.session),
+        "sales_count": value.sales_count,
+        "voided_count": value.voided_count,
+        "sales_total": money(value.sales_total),
+        "totals_by_method": [payment_total(t) for t in value.totals_by_method],
+    }
+
+
+def sale(value: Sale) -> Json:
+    return {
+        "id": uid(value.id),
+        "number": value.number,
+        "status": value.status.value,
+        "cashier_id": uid(value.cashier_id),
+        "cash_session_id": uid(value.cash_session_id),
+        "customer_id": uid(value.customer_id),
+        "subtotal": money(value.subtotal),
+        "tax_total": money(value.tax_total),
+        "discount_total": money(value.discount_total),
+        "total": money(value.total),
+        "change": money(value.change),
+        "note": value.note,
+        "created_at": ts(value.created_at),
+        "voided_at": ts(value.voided_at),
+        "void_reason": value.void_reason or None,
+        "lines": [
+            {
+                "product_id": uid(line.product_id),
+                "sku": line.sku,
+                "description": line.description,
+                "quantity": quantity(line.quantity),
+                "unit_price": money(line.unit_price),
+                "discount": money(line.discount),
+                "tax_rate": str(line.tax_rate),
+                "base": money(line.base),
+                "tax": money(line.tax),
+                "total": money(line.total),
+            }
+            for line in value.lines
+        ],
+        "payments": [
+            {"method": p.method_code, "name": p.method_name, "kind": p.kind.value, "amount": money(p.amount)}
+            for p in value.payments
+        ],
+    }
+
+
+def sales_summary(value: SalesSummary) -> Json:
+    return {
+        "from": value.date_from.isoformat(),
+        "to": value.date_to.isoformat(),
+        "group_by": value.group_by,
+        "sales_count": value.sales_count,
+        "voided_count": value.voided_count,
+        "subtotal": money(value.subtotal),
+        "tax_total": money(value.tax_total),
+        "discount_total": money(value.discount_total),
+        "total": money(value.total),
+        "average_ticket": money(value.average_ticket),
+        "by_payment_method": [payment_total(t) for t in value.by_payment_method],
+        "by_period": [
+            {"period": p.period, "sales_count": p.sales_count, "total": money(p.total)} for p in value.by_period
+        ],
+    }
+
+
+def product_sales(value: ProductSales) -> Json:
+    return {
+        "product_id": uid(value.product_id),
+        "sku": value.sku,
+        "description": value.description,
+        "quantity": quantity(value.quantity),
+        "total": money(value.total),
+    }

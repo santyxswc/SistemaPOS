@@ -1,0 +1,6 @@
+# Finales de linea LF en el repositorio, igual en Windows y Linux
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.ico binary

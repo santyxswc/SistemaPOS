@@ -1,6 +1,6 @@
 """Flujos completos de los casos de uso contra SQLite real."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from pos.application.use_cases.customers import CreateCustomerCommand, RegisterCustomerPayment  # noqa: F401
@@ -232,7 +232,7 @@ class ReportTests(PosTestCase):
 
     def test_reports_use_the_business_timezone(self):
         # 03:00 UTC del 6 de octubre son las 10:00 p. m. del 5 de octubre en Colombia.
-        self.clock.current = datetime(2026, 10, 6, 3, 0, tzinfo=timezone.utc)
+        self.clock.current = datetime(2026, 10, 6, 3, 0, tzinfo=UTC)
         self.sell(self.admin, [(self.rice, "1")], [("efectivo", "2500")])
         summary = self.c.get_sales_summary.execute(self.admin, date(2026, 10, 5), date(2026, 10, 5))
         self.assertEqual(summary.sales_count, 1)

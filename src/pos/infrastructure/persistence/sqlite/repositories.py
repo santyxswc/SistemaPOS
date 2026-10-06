@@ -10,7 +10,7 @@ import json
 import sqlite3
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -36,7 +36,7 @@ _CHUNK = 500  # límite seguro de parámetros por consulta en SQLite
 def _ts(value: datetime | None) -> str | None:
     if value is None:
         return None
-    return value.astimezone(timezone.utc).isoformat(timespec="microseconds")
+    return value.astimezone(UTC).isoformat(timespec="microseconds")
 
 
 def _dt(text: str | None) -> datetime | None:

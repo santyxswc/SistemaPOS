@@ -6,7 +6,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from .shared.entity import AggregateRoot, Entity
@@ -15,7 +15,7 @@ from .shared.events import DomainEvent
 from .shared.values import Money, TaxRate, format_quantity, parse_enum, to_quantity
 
 
-class Unit(str, Enum):
+class Unit(StrEnum):
     UNIT = "unit"
     KILOGRAM = "kg"
     POUND = "lb"

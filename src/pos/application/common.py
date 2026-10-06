@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import TypeVar
 
 from ..domain.settings import BusinessSettings
@@ -37,6 +37,6 @@ def local_day_range(date_from: date, date_to: date, tz: tzinfo) -> tuple[datetim
         raise ValidationError("La fecha inicial no puede ser posterior a la final")
     if (date_to - date_from).days > 366:
         raise ValidationError("El rango máximo es de un año")
-    start = datetime.combine(date_from, time.min, tzinfo=tz).astimezone(timezone.utc)
-    end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=tz).astimezone(timezone.utc)
+    start = datetime.combine(date_from, time.min, tzinfo=tz).astimezone(UTC)
+    end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=tz).astimezone(UTC)
     return start, end

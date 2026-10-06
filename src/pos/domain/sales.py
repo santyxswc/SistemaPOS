@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from .payments import PaymentKind, behavior_for
@@ -18,7 +18,7 @@ from .shared.values import Money, TaxRate
 from .taxes import TaxPolicy
 
 
-class SaleStatus(str, Enum):
+class SaleStatus(StrEnum):
     COMPLETED = "completed"
     VOIDED = "voided"
 

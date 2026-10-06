@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest import TestCase
 from uuid import uuid4
@@ -14,7 +14,7 @@ from pos.domain.shared.errors import (
 )
 from pos.domain.shared.values import Money, TaxRate
 
-AT = datetime(2026, 10, 5, 15, tzinfo=timezone.utc)
+AT = datetime(2026, 10, 5, 15, tzinfo=UTC)
 USER = uuid4()
 
 

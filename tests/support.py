@@ -6,7 +6,7 @@ import os
 import tempfile
 import unittest
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -26,7 +26,7 @@ CASHIER_PASSWORD = "clave-segura-2"
 
 class FixedClock:
     def __init__(self, start: datetime | None = None) -> None:
-        self.current = start or datetime(2026, 10, 5, 15, 0, tzinfo=timezone.utc)
+        self.current = start or datetime(2026, 10, 5, 15, 0, tzinfo=UTC)
 
     def now(self) -> datetime:
         return self.current

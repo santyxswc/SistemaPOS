@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from .catalog import required_text
@@ -14,12 +14,12 @@ from .shared.events import DomainEvent
 from .shared.values import Money
 
 
-class CashSessionStatus(str, Enum):
+class CashSessionStatus(StrEnum):
     OPEN = "open"
     CLOSED = "closed"
 
 
-class CashMovementType(str, Enum):
+class CashMovementType(StrEnum):
     SALE = "sale"
     SALE_VOID = "sale_void"
     DEPOSIT = "deposit"

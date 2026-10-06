@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from .shared.entity import AggregateRoot
 from .shared.errors import ValidationError
@@ -15,12 +15,12 @@ _USERNAME = re.compile(r"[a-z0-9._-]{3,32}")
 MIN_PASSWORD_LENGTH = 8
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     ADMIN = "admin"
     CASHIER = "cashier"
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     MANAGE_USERS = "manage_users"
     MANAGE_SETTINGS = "manage_settings"
     MANAGE_CATALOG = "manage_catalog"

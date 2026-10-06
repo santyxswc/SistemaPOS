@@ -5,14 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from .shared.entity import Entity
 from .shared.values import Money
 
 
-class MovementType(str, Enum):
+class MovementType(StrEnum):
     INITIAL = "initial"
     PURCHASE = "purchase"
     ADJUSTMENT = "adjustment"

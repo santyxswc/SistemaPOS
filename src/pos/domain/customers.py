@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from .catalog import required_text
@@ -81,7 +81,7 @@ class Customer(AggregateRoot):
         self.balance -= amount
 
 
-class LedgerEntryType(str, Enum):
+class LedgerEntryType(StrEnum):
     CHARGE = "charge"
     PAYMENT = "payment"
     REVERSAL = "reversal"

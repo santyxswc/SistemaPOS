@@ -11,3 +11,7 @@ data/
 dist/
 build/
 *.egg-info/
+
+# Interfaz compilada (se genera con: cd frontend && npm run build)
+src/pos/presentation/web/static/
+node_modules/

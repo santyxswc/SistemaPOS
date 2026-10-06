@@ -29,6 +29,23 @@ def load_dotenv(path: str | Path = ".env") -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
+def render_env(template: str, values: Mapping[str, str]) -> str:
+    """Rellena las líneas KEY= de una plantilla .env; las claves que no están se agregan al final."""
+    pending = dict(values)
+    lines = []
+    for line in template.splitlines():
+        key = line.split("=", 1)[0].strip()
+        if "=" in line and not line.lstrip().startswith("#") and key in pending:
+            line = f"{key}={pending.pop(key)}"
+        lines.append(line)
+    lines.extend(f"{key}={value}" for key, value in pending.items())
+    return "\n".join(lines) + "\n"
+
+
+def new_secret_key() -> str:
+    return secrets.token_urlsafe(48)
+
+
 @dataclass(frozen=True)
 class AppConfig:
     database_path: str
@@ -53,7 +70,7 @@ class AppConfig:
         if not secret:
             if environment != "development":
                 raise RuntimeError("Defina POS_SECRET_KEY (mínimo 32 caracteres) antes de iniciar en producción")
-            secret = secrets.token_urlsafe(48)
+            secret = new_secret_key()
             logger.warning("POS_SECRET_KEY no definida: se usa una temporal (las sesiones se pierden al reiniciar)")
         elif len(secret) < 32:
             raise RuntimeError("POS_SECRET_KEY debe tener al menos 32 caracteres")

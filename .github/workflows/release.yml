@@ -1,0 +1,40 @@
+name: Versión para Windows
+
+# Construye PuntoDeVenta.exe, lo prueba y genera el .zip y el instalador setup.exe.
+# - Manual: pestaña Actions → "Versión para Windows" → Run workflow (descargue los archivos del resultado).
+# - Al publicar una etiqueta vX.Y.Z crea además un Release en GitHub con los archivos.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest  # trae Inno Setup 6 instalado
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -r requirements-build.txt
+      - run: python -X utf8 packaging/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PuntoDeVenta-windows
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+      - if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/*.zip dist/*-setup.exe --generate-notes --title "Punto de Venta ${{ github.ref_name }}"
+        shell: bash

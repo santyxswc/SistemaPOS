@@ -6,31 +6,44 @@ El mismo código sirve para cualquier negocio: lo que cambia de un cliente a otr
 
 ## Instalación en el computador de un cliente (Windows)
 
-Requisito: [Python 3.11 o superior](https://www.python.org/downloads/) con la opción *Add python.exe to PATH*.
+El cliente **no necesita instalar Python ni nada más**.
 
-1. Copie la carpeta del sistema (por ejemplo a `C:\POS`).
-2. Doble clic en **`instalar.bat`**: pide el nombre del negocio y crea el usuario administrador.
-3. Doble clic en **`iniciar-pos.bat`**: abre el sistema en el navegador. Deje esa ventana abierta mientras se trabaja.
+1. Ejecute **`PuntoDeVenta-<versión>-setup.exe`**. No pide permisos de administrador; ofrece crear un acceso directo en el escritorio y programar el respaldo diario.
+2. Abra **Punto de Venta**. La primera vez, el navegador pide el nombre del negocio y crea la cuenta del administrador.
 
-Otros computadores de la misma red pueden usar el sistema entrando a `http://IP-DEL-SERVIDOR:8000` si en `.env` se define `POS_HOST=0.0.0.0`.
+La ventana negra que acompaña al sistema muestra la dirección; cerrarla apaga el sistema. Abrirlo de nuevo cuando ya está abierto solo abre el navegador.
 
-**Respaldos**: `respaldo.bat` guarda una copia en `data\backups` (conserva las últimas 30). Para hacerla todos los días a las 10 p. m.:
+Sin instalador, el `.zip` sirve igual: descomprima la carpeta `PuntoDeVenta` y abra `PuntoDeVenta.exe`.
 
-```bat
-schtasks /create /tn "POS respaldo" /sc daily /st 22:00 /tr "C:\POS\respaldo.bat"
-```
+| Qué | Dónde |
+| --- | --- |
+| Programa | `%LOCALAPPDATA%\Programs\PuntoDeVenta` (lo reemplaza cada actualización) |
+| Datos del negocio | `%LOCALAPPDATA%\PuntoDeVenta`: `.env`, `data\pos.sqlite3`, `data\backups`, `logs\pos.log` |
 
-Para restaurar, detenga el sistema y reemplace `data\pos.sqlite3` por el respaldo elegido.
+Actualizar es ejecutar el instalador de la versión nueva: los datos no se tocan y la base de datos se actualiza sola al abrir. Desinstalar tampoco borra los datos.
 
-### Cómo preparar una versión para entregar
+**Respaldos**: el instalador puede programar uno diario a las 10 p. m. (conserva los últimos 30); también hay un acceso "Copia de seguridad del Punto de Venta" en el menú Inicio. Para restaurar, cierre el sistema y reemplace `data\pos.sqlite3` por el respaldo elegido.
 
-La interfaz compilada no se guarda en git. Para entregar a un cliente que no tiene Node:
+**Red local**: para usarlo desde otros computadores, ponga `POS_HOST=0.0.0.0` en el `.env` de la carpeta de datos y entre a `http://IP-DEL-SERVIDOR:8000`.
+
+### Publicar una versión
+
+1. Suba la versión en `src/pos/__init__.py`, `pyproject.toml` y `frontend/package.json`.
+2. Cree y publique la etiqueta: `git tag v0.3.0 && git push origin v0.3.0`.
+3. GitHub Actions ("Versión para Windows") compila la interfaz, empaqueta el `.exe`, lo **arranca y prueba**, y publica un *Release* con el `.zip` y el `setup.exe`. Si la etiqueta no coincide con la versión del código, falla.
+
+Para construirla en su propio computador (necesita Node; el `setup.exe` solo si tiene [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
 ```bash
-cd frontend && npm ci && npm run build   # genera src/pos/presentation/web/static
+pip install -r requirements-build.txt
+python packaging/build.py          # resultado en dist/
 ```
 
-y copie la carpeta del proyecto sin `.venv`, `node_modules`, `data` ni `.env`. `instalar.bat` detecta que la interfaz ya está compilada.
+Windows mostrará "Windows protegió su PC" al abrir un instalador sin firma digital: el cliente debe pulsar *Más información → Ejecutar de todas formas*. Para quitar el aviso hace falta un certificado de firma de código.
+
+### Sin instalador, desde el código fuente
+
+Con [Python 3.11+](https://www.python.org/downloads/): `instalar.bat` prepara el entorno e `iniciar-pos.bat` abre el sistema. `respaldo.bat` hace la copia de seguridad.
 
 ## Desarrollo
 
@@ -38,7 +51,7 @@ y copie la carpeta del proyecto sin `.venv`, `node_modules`, `data` ni `.env`. `
 python -m venv .venv
 .venv\Scripts\activate                 # Windows  (Linux/macOS: source .venv/bin/activate)
 pip install -r requirements-dev.txt
-python manage.py init                  # crea .env, la base de datos y el administrador
+python manage.py start                 # crea .env y la base de datos; el navegador pide el resto
 ```
 
 En `.env` ponga `POS_ENV=development` y en dos terminales:
@@ -48,12 +61,15 @@ python manage.py runserver             # API en http://127.0.0.1:8000
 cd frontend && npm install && npm run dev   # interfaz con recarga en http://localhost:5173
 ```
 
+Los mismos comandos funcionan con `PuntoDeVenta.exe <comando>`:
+
 | Comando | Qué hace |
 | --- | --- |
-| `python manage.py init` | Instalación en un paso (respeta una instalación existente). `POS_ADMIN_PASSWORD` permite hacerlo sin preguntas. |
-| `python manage.py runserver [--open]` | Inicia el sistema; en producción usa waitress. |
-| `python manage.py backup [--dir] [--keep 30]` | Respaldo en caliente, verificado con `integrity_check`. |
-| `python manage.py create-admin` | Crea el primer administrador. |
+| `start` (por defecto) | Prepara una instalación nueva si hace falta, inicia el sistema y abre el navegador. |
+| `init` | Instalación desde la consola. `POS_ADMIN_PASSWORD` permite hacerla sin preguntas. |
+| `runserver [--open]` | Solo el servidor; con `POS_ENV=development`, el de Flask con recarga. |
+| `backup [--dir] [--keep 30]` | Respaldo en caliente, verificado con `integrity_check`. |
+| `create-admin` | Crea el primer administrador. |
 
 ## Arquitectura
 
@@ -175,8 +191,8 @@ Todos los errores tienen la misma forma, con mensajes listos para mostrar al usu
 ## Pruebas
 
 ```bash
-python -m pytest              # 91 pruebas del backend
-cd frontend && npm test       # 17 pruebas del frontend
+python -m pytest              # 95 pruebas del backend
+cd frontend && npm test       # 18 pruebas del frontend
 ```
 
 Backend: dominio puro, casos de uso sobre SQLite real, la API HTTP de punta a punta, concurrencia (dos cajas vendiendo la última unidad; lecturas que no esperan a quien escribe), migraciones sobre bases existentes, equivalencia de los reportes en SQL contra el cálculo del dominio, idempotencia, freno de login y respaldos. Frontend: dinero y carrito, y el flujo de venta en un DOM simulado (cobro con vueltas, reintento tras falla de red, validaciones, permisos). GitHub Actions corre todo en Windows y Linux en cada cambio.
@@ -198,4 +214,4 @@ Backend: dominio puro, casos de uso sobre SQLite real, la API HTTP de punta a pu
 2. Integración con un proveedor de facturación electrónica autorizado por la DIAN, con una bandeja de salida (*outbox*) para reintentar envíos fallidos.
 3. Adaptador PostgreSQL para clientes con varias sedes o en la nube.
 4. Permisos por rol configurables desde Ajustes.
-5. Empaquetar como instalador `.exe` (por ejemplo con PyInstaller) para no depender de Python instalado.
+5. Firma digital del instalador y actualización automática.

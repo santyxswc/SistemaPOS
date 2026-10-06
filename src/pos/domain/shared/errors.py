@@ -49,5 +49,9 @@ class AuthenticationError(DomainError):
     code = "authentication_failed"
 
 
+class TooManyAttempts(DomainError):
+    code = "too_many_attempts"
+
+
 class PermissionDenied(DomainError):
     code = "permission_denied"

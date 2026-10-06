@@ -19,7 +19,7 @@ from .infrastructure.events import SyncEventBus
 from .infrastructure.invoicing import NoInvoiceProvider
 from .infrastructure.persistence.sqlite.migrations import migrate
 from .infrastructure.persistence.sqlite.unit_of_work import SqliteUnitOfWork
-from .infrastructure.security import JwtTokenService, Pbkdf2PasswordHasher
+from .infrastructure.security import InMemoryLoginThrottle, JwtTokenService, Pbkdf2PasswordHasher
 
 
 @dataclass(frozen=True)
@@ -98,7 +98,7 @@ def build_container(
     return Container(
         config=config,
         uow_factory=uow,
-        login=users.Login(uow, hasher, tokens),
+        login=users.Login(uow, hasher, tokens, InMemoryLoginThrottle(clock)),
         resolve_actor=users.ResolveActor(uow, tokens),
         bootstrap_admin=users.BootstrapAdmin(uow, hasher, clock),
         create_user=users.CreateUser(uow, hasher, clock),

@@ -1,4 +1,4 @@
-"""Contraseñas con PBKDF2 (biblioteca estándar) y sesiones con JWT firmados (HS256)."""
+"""Contraseñas con PBKDF2 (biblioteca estándar), sesiones con JWT firmados (HS256) y freno a la fuerza bruta."""
 
 from __future__ import annotations
 
@@ -6,13 +6,15 @@ import base64
 import hashlib
 import hmac
 import secrets
-from datetime import timedelta
+import threading
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import jwt
 
 from ..application.ports import Clock
-from ..domain.shared.errors import AuthenticationError
+from ..domain.shared.errors import AuthenticationError, TooManyAttempts
 from ..domain.users import User
 
 
@@ -84,3 +86,59 @@ class JwtTokenService:
             return UUID(payload["sub"])
         except (jwt.PyJWTError, ValueError, KeyError):
             raise AuthenticationError("Sesión no válida o vencida: inicie sesión de nuevo") from None
+
+
+@dataclass
+class _Attempts:
+    failures: int
+    first_failure: datetime
+    locked_until: datetime | None = None
+
+
+class InMemoryLoginThrottle:
+    """Tras `max_failures` intentos fallidos seguidos, bloquea ese usuario por `lockout`.
+
+    Vive en la memoria del proceso: suficiente para un servidor por negocio. Con
+    varios servidores se reemplaza por una implementación compartida (p. ej. Redis).
+    """
+
+    def __init__(
+        self,
+        clock: Clock,
+        *,
+        max_failures: int = 5,
+        window: timedelta = timedelta(minutes=15),
+        lockout: timedelta = timedelta(minutes=5),
+    ) -> None:
+        self._clock = clock
+        self._max_failures = max_failures
+        self._window = window
+        self._lockout = lockout
+        self._attempts: dict[str, _Attempts] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> None:
+        now = self._clock.now()
+        with self._lock:
+            attempts = self._attempts.get(key)
+            if attempts is None or attempts.locked_until is None:
+                return
+            if now >= attempts.locked_until:
+                del self._attempts[key]
+                return
+            minutes = max(1, -(-int((attempts.locked_until - now).total_seconds()) // 60))
+        raise TooManyAttempts(f"Demasiados intentos fallidos: espere {minutes} min e intente de nuevo")
+
+    def failed(self, key: str) -> None:
+        now = self._clock.now()
+        with self._lock:
+            attempts = self._attempts.get(key)
+            if attempts is None or now - attempts.first_failure > self._window:
+                attempts = self._attempts[key] = _Attempts(failures=0, first_failure=now)
+            attempts.failures += 1
+            if attempts.failures >= self._max_failures:
+                attempts.locked_until = now + self._lockout
+
+    def succeeded(self, key: str) -> None:
+        with self._lock:
+            self._attempts.pop(key, None)

@@ -47,6 +47,18 @@ class TokenService(Protocol):
         ...
 
 
+class LoginThrottle(Protocol):
+    """Frena los intentos repetidos de adivinar una contraseña."""
+
+    def check(self, key: str) -> None:
+        """Lanza TooManyAttempts si la clave está bloqueada."""
+        ...
+
+    def failed(self, key: str) -> None: ...
+
+    def succeeded(self, key: str) -> None: ...
+
+
 class EventPublisher(Protocol):
     def publish(self, events: Sequence[DomainEvent]) -> None: ...
 

@@ -9,7 +9,7 @@ from ...domain.shared.errors import AuthenticationError, BusinessRuleViolation, 
 from ...domain.users import Permission, Role, User, normalize_username, validate_password
 from ..actor import Actor
 from ..common import get_or_404, require_settings
-from ..ports import Clock, PasswordHasher, TokenService, UnitOfWork, UnitOfWorkFactory
+from ..ports import Clock, LoginThrottle, PasswordHasher, TokenService, UnitOfWork, UnitOfWorkFactory
 
 _INVALID_CREDENTIALS = "Usuario o contraseña incorrectos"
 
@@ -29,21 +29,29 @@ class LoginResult:
 
 
 class Login:
-    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, tokens: TokenService) -> None:
+    def __init__(
+        self, uow: UnitOfWorkFactory, hasher: PasswordHasher, tokens: TokenService, throttle: LoginThrottle
+    ) -> None:
         self._uow = uow
         self._hasher = hasher
         self._tokens = tokens
+        self._throttle = throttle
         self._dummy_hash: str | None = None
 
     def execute(self, username: str, password: str) -> LoginResult:
+        key = normalize_username(username)
+        self._throttle.check(key)
         with self._uow(read_only=True) as uow:
-            user = uow.users.get_by_username(normalize_username(username))
+            user = uow.users.get_by_username(key)
         if user is None or not user.active:
             # Mismo trabajo exista o no el usuario: no se puede adivinar quién existe por el tiempo.
             self._hasher.verify(password, self._dummy())
+            self._throttle.failed(key)
             raise AuthenticationError(_INVALID_CREDENTIALS)
         if not self._hasher.verify(password, user.password_hash):
+            self._throttle.failed(key)
             raise AuthenticationError(_INVALID_CREDENTIALS)
+        self._throttle.succeeded(key)
         return LoginResult(token=self._tokens.issue(user), expires_in=self._tokens.expires_in_seconds, user=user)
 
     def _dummy(self) -> str:

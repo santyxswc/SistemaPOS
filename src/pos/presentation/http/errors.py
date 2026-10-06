@@ -15,6 +15,7 @@ from ...domain.shared.errors import (
     DomainError,
     NotFoundError,
     PermissionDenied,
+    TooManyAttempts,
     ValidationError,
 )
 from .request import InvalidPayload
@@ -27,6 +28,7 @@ _STATUS: tuple[tuple[type[DomainError], int], ...] = (
     (NotFoundError, 404),
     (ConflictError, 409),
     (BusinessRuleViolation, 422),
+    (TooManyAttempts, 429),
     (ValidationError, 400),
 )
 

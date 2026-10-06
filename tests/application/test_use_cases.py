@@ -8,16 +8,18 @@ from pos.application.use_cases.sales import CreateSaleCommand, ListSalesQuery, P
 from pos.application.use_cases.users import CreateUserCommand, UpdateUserCommand
 from pos.domain.payments import DEFAULT_PAYMENT_METHODS, PaymentKind, PaymentMethodConfig
 from pos.domain.shared.errors import (
+    AuthenticationError,
     BusinessRuleViolation,
     ConflictError,
     CreditLimitExceeded,
     InsufficientStock,
     PermissionDenied,
+    TooManyAttempts,
 )
 from pos.domain.shared.values import Money
 from pos.domain.users import Role
 
-from ..support import PosTestCase
+from ..support import ADMIN_PASSWORD, PosTestCase
 
 
 class SalesFlowTests(PosTestCase):
@@ -274,3 +276,39 @@ class ReportTests(PosTestCase):
         self.assertEqual([s.id for s in listed], [mine.id])
         with self.assertRaises(PermissionDenied):
             self.c.get_sales_summary.execute(cashier, date(2026, 10, 5), date(2026, 10, 5))
+
+
+class LoginThrottleTests(PosTestCase):
+    def fail_login(self, times):
+        for _ in range(times):
+            with self.assertRaises(AuthenticationError):
+                self.c.login.execute("admin", "clave-equivocada")
+
+    def test_blocks_the_user_after_five_failures_even_with_the_right_password(self):
+        self.fail_login(5)
+        with self.assertRaisesRegex(TooManyAttempts, "espere 5 min"):
+            self.c.login.execute("admin", ADMIN_PASSWORD)
+
+    def test_unblocks_after_the_lockout(self):
+        self.fail_login(5)
+        self.clock.advance(minutes=5)
+        self.assertEqual(self.c.login.execute("ADMIN", ADMIN_PASSWORD).user.username, "admin")
+
+    def test_a_successful_login_resets_the_count(self):
+        self.fail_login(4)
+        self.c.login.execute("admin", ADMIN_PASSWORD)
+        self.fail_login(4)
+        self.c.login.execute("admin", ADMIN_PASSWORD)
+
+    def test_old_failures_expire(self):
+        self.fail_login(4)
+        self.clock.advance(minutes=16)
+        self.fail_login(4)
+        self.c.login.execute("admin", ADMIN_PASSWORD)
+
+    def test_unknown_users_are_throttled_too(self):
+        for _ in range(5):
+            with self.assertRaises(AuthenticationError):
+                self.c.login.execute("nadie", "x" * 8)
+        with self.assertRaises(TooManyAttempts):
+            self.c.login.execute("nadie", "x" * 8)

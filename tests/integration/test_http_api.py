@@ -53,6 +53,13 @@ class HttpApiTests(PosTestCase):
         self.assertEqual((response.status_code, nobody.status_code), (401, 401))
         self.assertEqual(response.get_json(), nobody.get_json())
 
+    def test_too_many_failed_logins_answer_429(self):
+        for _ in range(5):
+            self.client.post("/api/v1/auth/login", json={"username": "admin", "password": "otra-clave"})
+        response = self.client.post("/api/v1/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.get_json()["error"]["code"], "too_many_attempts")
+
     def test_full_day_over_http(self):
         product = self.api("POST", "/api/v1/products", json={
             "sku": "gaseosa-400", "name": "Gaseosa 400 ml", "price": "3000",

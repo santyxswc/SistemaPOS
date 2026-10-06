@@ -18,3 +18,11 @@ node_modules/
 
 # Claves privadas (la de licencias nunca va al repositorio)
 *.pem
+*.key
+*.p12
+*.pfx
+clave*
+*-licencias*
+secrets/
+.env.*
+!.env.example

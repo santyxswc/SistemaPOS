@@ -5,6 +5,7 @@ export type Permission =
   | "manage_settings"
   | "manage_catalog"
   | "manage_inventory"
+  | "manage_suppliers"
   | "sell"
   | "apply_discounts"
   | "void_sales"
@@ -157,7 +158,7 @@ export interface LedgerEntry {
 
 export interface CashMovement {
   id: string;
-  type: "sale" | "sale_void" | "deposit" | "withdrawal" | "credit_collection";
+  type: "sale" | "sale_void" | "deposit" | "withdrawal" | "credit_collection" | "supplier_payment";
   amount: string;
   reference: string | null;
   note: string;
@@ -246,6 +247,72 @@ export interface ProductSales {
   description: string;
   quantity: string;
   total: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  document: string | null;
+  contact_name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  balance: string;
+  active: boolean;
+}
+
+export type PurchasePaymentMode = "cash_drawer" | "external" | "credit";
+
+export interface PurchaseLine {
+  product_id: string;
+  sku: string;
+  description: string;
+  quantity: string;
+  unit_cost: string;
+  total: string;
+}
+
+export interface Purchase {
+  id: string;
+  number: number;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  invoice_number: string;
+  payment_mode: PurchasePaymentMode;
+  status: "paid" | "pending";
+  total: string;
+  outstanding: string;
+  due_date: string | null;
+  overdue: boolean;
+  note: string;
+  created_at: string;
+  lines: PurchaseLine[];
+}
+
+export interface SupplierEntry {
+  id: string;
+  type: "purchase" | "payment";
+  amount: string;
+  balance_after: string;
+  purchase_id: string | null;
+  method: string;
+  note: string;
+  created_at: string;
+}
+
+export interface SupplierStatement {
+  supplier: Supplier;
+  entries: SupplierEntry[];
+  pending: Purchase[];
+}
+
+export interface Payables {
+  today: string;
+  total: string;
+  overdue: string;
+  due_soon: string;
+  suppliers: { supplier: Supplier; overdue: string; next_due_date: string | null }[];
 }
 
 export interface Items<T> {

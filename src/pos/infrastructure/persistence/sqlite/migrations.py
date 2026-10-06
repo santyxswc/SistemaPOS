@@ -217,6 +217,65 @@ MIGRATIONS: list[Migration] = [
     """,
     # 3: montos netos por pago para reportes agregados en SQL
     _store_applied_payment_amounts,
+    # 4: proveedores, compras de mercancía y cuentas por pagar
+    f"""
+    CREATE TABLE suppliers (
+        id           TEXT PRIMARY KEY,
+        name         TEXT NOT NULL,
+        document     TEXT UNIQUE,
+        contact_name TEXT NOT NULL,
+        phone        TEXT NOT NULL,
+        email        TEXT NOT NULL,
+        address      TEXT NOT NULL,
+        notes        TEXT NOT NULL,
+        search_text  TEXT NOT NULL,
+        balance      TEXT NOT NULL,
+        active       INTEGER NOT NULL,
+        created_at   TEXT NOT NULL
+    );
+
+    CREATE TABLE purchases (
+        id             TEXT PRIMARY KEY,
+        number         INTEGER NOT NULL UNIQUE,
+        supplier_id    TEXT REFERENCES suppliers(id) {FK},
+        invoice_number TEXT NOT NULL,
+        payment_mode   TEXT NOT NULL,
+        total          TEXT NOT NULL,
+        outstanding    TEXT NOT NULL,
+        due_date       TEXT,
+        note           TEXT NOT NULL,
+        user_id        TEXT NOT NULL REFERENCES users(id) {FK},
+        created_at     TEXT NOT NULL
+    );
+    CREATE INDEX ix_purchases_created_at ON purchases(created_at);
+    CREATE INDEX ix_purchases_supplier ON purchases(supplier_id, created_at);
+    CREATE INDEX ix_purchases_pending ON purchases(due_date) WHERE outstanding <> '0.00';
+
+    CREATE TABLE purchase_lines (
+        purchase_id TEXT NOT NULL REFERENCES purchases(id) {FK},
+        position    INTEGER NOT NULL,
+        product_id  TEXT NOT NULL REFERENCES products(id) {FK},
+        sku         TEXT NOT NULL,
+        description TEXT NOT NULL,
+        quantity    TEXT NOT NULL,
+        unit_cost   TEXT NOT NULL,
+        PRIMARY KEY (purchase_id, position)
+    );
+
+    CREATE TABLE supplier_ledger (
+        id            TEXT PRIMARY KEY,
+        supplier_id   TEXT NOT NULL REFERENCES suppliers(id) {FK},
+        type          TEXT NOT NULL,
+        amount        TEXT NOT NULL,
+        balance_after TEXT NOT NULL,
+        purchase_id   TEXT REFERENCES purchases(id) {FK},
+        method        TEXT NOT NULL,
+        note          TEXT NOT NULL,
+        user_id       TEXT NOT NULL REFERENCES users(id) {FK},
+        created_at    TEXT NOT NULL
+    );
+    CREATE INDEX ix_supplier_ledger_supplier ON supplier_ledger(supplier_id, created_at);
+    """,
 ]
 
 

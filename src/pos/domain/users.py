@@ -26,6 +26,7 @@ class Permission(StrEnum):
     MANAGE_SETTINGS = "manage_settings"
     MANAGE_CATALOG = "manage_catalog"
     MANAGE_INVENTORY = "manage_inventory"
+    MANAGE_SUPPLIERS = "manage_suppliers"
     SELL = "sell"
     APPLY_DISCOUNTS = "apply_discounts"
     VOID_SALES = "void_sales"
@@ -42,6 +43,7 @@ PERMISSION_LABELS: dict[Permission, str] = {
     Permission.MANAGE_SETTINGS: "cambiar la configuración del negocio",
     Permission.MANAGE_CATALOG: "administrar productos",
     Permission.MANAGE_INVENTORY: "administrar el inventario",
+    Permission.MANAGE_SUPPLIERS: "administrar proveedores y pagarles",
     Permission.SELL: "vender",
     Permission.APPLY_DISCOUNTS: "aplicar descuentos",
     Permission.VOID_SALES: "anular ventas",

@@ -26,6 +26,7 @@ from .repositories import (
     SqliteStockMovementRepository,
     SqliteUserRepository,
 )
+from .supplier_repositories import SqlitePurchaseRepository, SqliteSupplierLedgerRepository, SqliteSupplierRepository
 
 
 class SqliteUnitOfWork(UnitOfWork):
@@ -51,6 +52,9 @@ class SqliteUnitOfWork(UnitOfWork):
         self.stock_movements = SqliteStockMovementRepository(conn)
         self.customers = SqliteCustomerRepository(conn, self.track)
         self.ledger = SqliteLedgerRepository(conn)
+        self.suppliers = SqliteSupplierRepository(conn, self.track)
+        self.supplier_ledger = SqliteSupplierLedgerRepository(conn)
+        self.purchases = SqlitePurchaseRepository(conn, self.track)
         self.cash_sessions = SqliteCashSessionRepository(conn, self.track)
         self.sales = SqliteSaleRepository(conn, self.track)
         self.sales_reports = SqliteSalesReportQueries(conn)

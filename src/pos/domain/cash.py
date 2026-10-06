@@ -24,6 +24,7 @@ class CashMovementType(StrEnum):
     DEPOSIT = "deposit"
     WITHDRAWAL = "withdrawal"
     CREDIT_COLLECTION = "credit_collection"
+    SUPPLIER_PAYMENT = "supplier_payment"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -92,6 +93,12 @@ class CashSession(AggregateRoot):
     def register_credit_collection(self, *, amount: Money, customer_name: str, user_id: UUID, at: datetime) -> None:
         self._ensure_positive(amount)
         self._add(CashMovementType.CREDIT_COLLECTION, amount, user_id, at, reference=f"Abono de {customer_name}")
+
+    def pay_supplier(self, *, amount: Money, reference: str, user_id: UUID, at: datetime) -> CashMovement:
+        """Pago a un proveedor con el efectivo del cajón (compra de contado o abono a la deuda)."""
+        self._ensure_positive(amount)
+        self._ensure_cash_available(amount)
+        return self._add(CashMovementType.SUPPLIER_PAYMENT, -amount, user_id, at, reference=reference)
 
     def deposit(self, *, amount: Money, note: str, user_id: UUID, at: datetime) -> CashMovement:
         self._ensure_positive(amount)

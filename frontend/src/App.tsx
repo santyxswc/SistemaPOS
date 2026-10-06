@@ -11,6 +11,7 @@ import { SalesPage } from "./pages/Sales";
 import { SellPage } from "./pages/Sell";
 import { SettingsPage } from "./pages/Settings";
 import { SetupPage } from "./pages/Setup";
+import { SuppliersPage } from "./pages/Suppliers";
 import { ChangePasswordModal, UsersPage } from "./pages/Users";
 import { type Session, SessionContext } from "./session";
 import { type Me, type Permission, ROLE_LABEL, type Settings } from "./types";
@@ -20,7 +21,7 @@ interface Route {
   label: string;
   icon: string;
   shortcut?: string;
-  permission?: Permission;
+  permission?: Permission | Permission[]; // con una lista basta tener cualquiera de los permisos
   page: ComponentType;
 }
 
@@ -31,6 +32,13 @@ const ROUTES: Route[] = [
   { path: "ventas", label: "Ventas", icon: "🧾", shortcut: "F3", permission: "sell", page: SalesPage },
   { path: "productos", label: "Productos", icon: "📦", shortcut: "F4", page: ProductsPage },
   { path: "clientes", label: "Clientes", icon: "👥", page: CustomersPage },
+  {
+    path: "proveedores",
+    label: "Proveedores",
+    icon: "🚚",
+    permission: ["manage_suppliers", "manage_inventory"],
+    page: SuppliersPage,
+  },
   { path: "reportes", label: "Reportes", icon: "📊", permission: "view_reports", page: ReportsPage },
   { path: "usuarios", label: "Usuarios", icon: "🔑", permission: "manage_users", page: UsersPage },
   { path: "ajustes", label: "Ajustes", icon: "⚙️", permission: "manage_settings", page: SettingsPage },
@@ -125,7 +133,9 @@ function Shell(props: { me: Me; settings: Settings; logout: () => void; reloadSe
     () => ({ me, settings, logout, reloadSettings, can: (p) => me.permissions.includes(p) }),
     [me, settings, logout, reloadSettings],
   );
-  const routes = ROUTES.filter((route) => !route.permission || session.can(route.permission));
+  const allowed = (route: Route) =>
+    route.permission === undefined || [route.permission].flat().some((permission) => session.can(permission));
+  const routes = ROUTES.filter(allowed);
   const current = routes.find((route) => route.path === path) ?? routes[0];
 
   useEffect(() => {

@@ -14,6 +14,7 @@ const MOVEMENT_LABEL: Record<string, string> = {
   deposit: "Ingreso",
   withdrawal: "Retiro",
   credit_collection: "Abono de cliente",
+  supplier_payment: "Pago a proveedor",
 };
 
 async function loadCurrent(): Promise<CashReport | null> {

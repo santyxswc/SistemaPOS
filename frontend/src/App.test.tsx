@@ -326,3 +326,60 @@ describe("importar productos", () => {
     ]);
   });
 });
+
+describe("proveedores", () => {
+  const ADMIN: Me = {
+    id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+    permissions: ["manage_settings", "manage_inventory", "manage_suppliers", "sell", "operate_cash"],
+  };
+  const SUPPLIER = {
+    id: "sup-1", name: "Distribuidora El Sol", document: "900111222", contact_name: "Carlos", phone: "3001234567",
+    email: "", address: "", notes: "", balance: "0.00", active: true,
+  };
+
+  it("registra una compra a crédito escaneando los productos", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    window.location.hash = "/proveedores";
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /auth/me") return { body: ADMIN };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /license") return { body: { needs_attention: false } };
+      if (route === "GET /suppliers/payables")
+        return { body: { today: "2026-10-06", total: "0.00", overdue: "0.00", due_soon: "0.00", suppliers: [] } };
+      if (route === "GET /suppliers") return { body: { items: [SUPPLIER] } };
+      if (route === "GET /products/lookup") return { body: { ...RICE, cost: "1800.00" } };
+      if (route === "GET /products") return { body: { items: [] } };
+      if (route === "POST /purchases") return { status: 201, body: { number: 7, total: "36000.00" } };
+      return { status: 404, body: { error: { code: "not_found", message: "no simulado" } } };
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByText("No le debe nada a ningún proveedor.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Registrar compra" }));
+    const dialog = await screen.findByRole("dialog", { name: "Registrar compra de mercancía" });
+    await within(dialog).findByRole("option", { name: "Distribuidora El Sol" });
+    await user.selectOptions(within(dialog).getByLabelText(/Proveedor/), "sup-1");
+    await user.type(within(dialog).getByLabelText(/Número de factura/), "FV-88");
+    const search = within(dialog).getByLabelText(/Agregar producto/);
+    await user.type(search, "7702511000014{Enter}");
+    await user.type(search, "7702511000014{Enter}");
+    const quantity = await within(dialog).findByLabelText("Cantidad de Arroz Diana 500 g");
+    expect(quantity).toHaveProperty("value", "2"); // escanear dos veces suma, no repite la fila
+    await user.clear(quantity);
+    await user.type(quantity, "20");
+    expect(within(dialog).getByText("Total: $36.000")).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: "Guardar compra" }));
+
+    expect(await screen.findByText("Compra #7 registrada por $36.000")).toBeTruthy();
+    expect(calls.find((c) => c.method === "POST" && c.path === "/purchases")?.body).toEqual({
+      supplier_id: "sup-1",
+      invoice_number: "FV-88",
+      payment_mode: "credit",
+      due_date: null,
+      note: "",
+      items: [{ product_id: "p-arroz", quantity: "20", unit_cost: "1800.00" }],
+    });
+  });
+});

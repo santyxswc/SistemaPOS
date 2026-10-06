@@ -517,6 +517,36 @@ tr.clickable:hover td {
 .search-result.selected {
   background: var(--primary-soft);
 }
+/* ---- pestañas ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.tab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: 10px 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.input-num {
+  width: 120px;
+  text-align: right;
+}
+
 .qty {
   display: inline-flex;
   align-items: center;

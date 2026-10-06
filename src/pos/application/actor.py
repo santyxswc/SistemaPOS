@@ -33,3 +33,8 @@ class Actor:
     def require(self, permission: Permission) -> None:
         if not self.can(permission):
             raise PermissionDenied(f"No tiene permiso para {PERMISSION_LABELS[permission]}")
+
+    def require_any(self, *permissions: Permission) -> None:
+        """Basta con uno de los permisos (p. ej. ver compras: quien recibe mercancía o quien paga)."""
+        if not any(self.can(permission) for permission in permissions):
+            self.require(permissions[0])

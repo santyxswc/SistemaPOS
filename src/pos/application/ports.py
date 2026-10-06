@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
@@ -26,6 +26,7 @@ from ..domain.settings import BusinessSettings
 from ..domain.shared.entity import AggregateRoot
 from ..domain.shared.events import DomainEvent
 from ..domain.shared.values import Money
+from ..domain.suppliers import Purchase, Supplier, SupplierLedgerEntry
 from ..domain.users import User
 
 # --- Servicios técnicos -------------------------------------------------------
@@ -218,6 +219,57 @@ class LedgerRepository(Protocol):
     def list_for_customer(self, customer_id: UUID, *, limit: int = 50) -> list[LedgerEntry]: ...
 
 
+class SupplierRepository(Protocol):
+    def add(self, supplier: Supplier) -> None: ...
+
+    def save(self, supplier: Supplier) -> None: ...
+
+    def get(self, supplier_id: UUID) -> Supplier | None: ...
+
+    def get_by_document(self, document: str) -> Supplier | None: ...
+
+    def search(
+        self,
+        *,
+        text: str | None = None,
+        include_inactive: bool = False,
+        with_balance_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Supplier]: ...
+
+
+class SupplierLedgerRepository(Protocol):
+    def add(self, entry: SupplierLedgerEntry) -> None: ...
+
+    def list_for_supplier(self, supplier_id: UUID, *, limit: int = 50) -> list[SupplierLedgerEntry]: ...
+
+
+@dataclass(frozen=True)
+class PurchaseFilter:
+    supplier_id: UUID | None = None
+    pending_only: bool = False
+    start: datetime | None = None  # inclusive, UTC
+    end: datetime | None = None  # exclusivo, UTC
+    due_before: date | None = None  # pendientes que vencen antes de esta fecha (vencidas)
+
+
+class PurchaseRepository(Protocol):
+    def add(self, purchase: Purchase) -> None: ...
+
+    def save(self, purchase: Purchase) -> None:
+        """Solo cambia el saldo pendiente: las líneas de una compra nunca se editan."""
+        ...
+
+    def get(self, purchase_id: UUID) -> Purchase | None: ...
+
+    def find(self, where: PurchaseFilter, *, limit: int = 50, offset: int = 0) -> list[Purchase]:
+        """De la más reciente a la más antigua."""
+        ...
+
+    def list_pending_for_supplier(self, supplier_id: UUID) -> list[Purchase]: ...
+
+
 class CashSessionRepository(Protocol):
     def add(self, session: CashSession) -> None: ...
 
@@ -347,6 +399,9 @@ class UnitOfWork(ABC):
     stock_movements: StockMovementRepository
     customers: CustomerRepository
     ledger: LedgerRepository
+    suppliers: SupplierRepository
+    supplier_ledger: SupplierLedgerRepository
+    purchases: PurchaseRepository
     cash_sessions: CashSessionRepository
     sales: SaleRepository
     sales_reports: SalesReportQueries

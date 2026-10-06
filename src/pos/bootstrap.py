@@ -22,6 +22,7 @@ from .application.use_cases import (
     reports,
     sales,
     settings,
+    suppliers,
     users,
 )
 from .config import AppConfig
@@ -97,6 +98,17 @@ class Container:
     search_customers: customers.SearchCustomers
     get_customer_statement: customers.GetCustomerStatement
     register_customer_payment: customers.RegisterCustomerPayment
+    # proveedores, compras y cuentas por pagar
+    create_supplier: suppliers.CreateSupplier
+    update_supplier: suppliers.UpdateSupplier
+    get_supplier: suppliers.GetSupplier
+    search_suppliers: suppliers.SearchSuppliers
+    get_supplier_statement: suppliers.GetSupplierStatement
+    receive_purchase: suppliers.ReceivePurchase
+    list_purchases: suppliers.ListPurchases
+    get_purchase: suppliers.GetPurchase
+    pay_supplier: suppliers.PaySupplier
+    get_payables_summary: suppliers.GetPayablesSummary
     # reportes
     get_sales_summary: reports.GetSalesSummary
     get_top_products: reports.GetTopProducts
@@ -181,6 +193,16 @@ def build_container(
         search_customers=customers.SearchCustomers(uow),
         get_customer_statement=customers.GetCustomerStatement(uow),
         register_customer_payment=customers.RegisterCustomerPayment(uow, clock),
+        create_supplier=suppliers.CreateSupplier(uow, clock),
+        update_supplier=suppliers.UpdateSupplier(uow),
+        get_supplier=suppliers.GetSupplier(uow),
+        search_suppliers=suppliers.SearchSuppliers(uow),
+        get_supplier_statement=suppliers.GetSupplierStatement(uow, clock),
+        receive_purchase=suppliers.ReceivePurchase(uow, clock),
+        list_purchases=suppliers.ListPurchases(uow),
+        get_purchase=suppliers.GetPurchase(uow),
+        pay_supplier=suppliers.PaySupplier(uow, clock),
+        get_payables_summary=suppliers.GetPayablesSummary(uow, clock),
         get_sales_summary=sales_summary,
         get_top_products=reports.GetTopProducts(uow),
         export_sales_report=reports.ExportSalesReport(uow, sales_summary),

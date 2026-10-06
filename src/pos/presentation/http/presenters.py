@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -13,6 +13,12 @@ from ...application.use_cases.cash import CashSessionReport
 from ...application.use_cases.catalog_import import ProductImportReport
 from ...application.use_cases.customers import CustomerStatement
 from ...application.use_cases.reports import PaymentTotal, ProductSales, SalesSummary
+from ...application.use_cases.suppliers import (
+    PayablesSummary,
+    PurchaseDetails,
+    SupplierPaymentResult,
+    SupplierStatement,
+)
 from ...domain.cash import CashMovement, CashSession
 from ...domain.catalog import Category, Product
 from ...domain.customers import Customer, LedgerEntry
@@ -21,6 +27,7 @@ from ...domain.licensing import LicenseStatus
 from ...domain.sales import Sale
 from ...domain.settings import BusinessSettings
 from ...domain.shared.values import Money, format_quantity
+from ...domain.suppliers import Purchase, Supplier, SupplierLedgerEntry
 from ...domain.users import User
 
 Json = dict[str, Any]
@@ -306,4 +313,100 @@ def product_sales(value: ProductSales) -> Json:
         "description": value.description,
         "quantity": quantity(value.quantity),
         "total": money(value.total),
+    }
+
+
+def supplier(value: Supplier) -> Json:
+    return {
+        "id": uid(value.id),
+        "name": value.name,
+        "document": value.document,
+        "contact_name": value.contact_name,
+        "phone": value.phone,
+        "email": value.email,
+        "address": value.address,
+        "notes": value.notes,
+        "balance": money(value.balance),
+        "active": value.active,
+    }
+
+
+def supplier_entry(value: SupplierLedgerEntry) -> Json:
+    return {
+        "id": uid(value.id),
+        "type": value.type.value,
+        "amount": money(value.amount),
+        "balance_after": money(value.balance_after),
+        "purchase_id": uid(value.purchase_id),
+        "method": value.method,
+        "note": value.note,
+        "user_id": uid(value.user_id),
+        "created_at": ts(value.created_at),
+    }
+
+
+def purchase(value: Purchase, supplier_name: str | None = None, today: date | None = None) -> Json:
+    return {
+        "id": uid(value.id),
+        "number": value.number,
+        "supplier_id": uid(value.supplier_id),
+        "supplier_name": supplier_name,
+        "invoice_number": value.invoice_number,
+        "payment_mode": value.payment_mode.value,
+        "status": value.status.value,
+        "total": money(value.total),
+        "outstanding": money(value.outstanding),
+        "due_date": value.due_date.isoformat() if value.due_date else None,
+        "overdue": value.is_overdue(today) if today else False,
+        "note": value.note,
+        "user_id": uid(value.user_id),
+        "created_at": ts(value.created_at),
+        "lines": [
+            {
+                "product_id": uid(line.product_id),
+                "sku": line.sku,
+                "description": line.description,
+                "quantity": quantity(line.quantity),
+                "unit_cost": money(line.unit_cost),
+                "total": money(line.total),
+            }
+            for line in value.lines
+        ],
+    }
+
+
+def purchase_details(value: PurchaseDetails, today: date | None = None) -> Json:
+    return purchase(value.purchase, value.supplier_name, today)
+
+
+def supplier_statement(value: SupplierStatement) -> Json:
+    return {
+        "supplier": supplier(value.supplier),
+        "entries": [supplier_entry(e) for e in value.entries],
+        "pending": [purchase(p, value.supplier.name, value.today) for p in value.pending],
+    }
+
+
+def supplier_payment(value: SupplierPaymentResult) -> Json:
+    return {
+        "entry": supplier_entry(value.entry),
+        "applied": [{"purchase_id": uid(p.id), "number": p.number, "amount": money(amount)}
+                    for p, amount in value.applied],
+    }
+
+
+def payables_summary(value: PayablesSummary) -> Json:
+    return {
+        "today": value.today.isoformat(),
+        "total": money(value.total),
+        "overdue": money(value.overdue),
+        "due_soon": money(value.due_soon),
+        "suppliers": [
+            {
+                "supplier": supplier(row.supplier),
+                "overdue": money(row.overdue),
+                "next_due_date": row.next_due_date.isoformat() if row.next_due_date else None,
+            }
+            for row in value.suppliers
+        ],
     }

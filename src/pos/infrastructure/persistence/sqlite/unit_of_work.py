@@ -12,6 +12,7 @@ import sqlite3
 
 from ....application.ports import EventPublisher, UnitOfWork
 from .connection import connect
+from .report_queries import SqliteSalesReportQueries
 from .repositories import (
     SqliteCashSessionRepository,
     SqliteCategoryRepository,
@@ -50,6 +51,7 @@ class SqliteUnitOfWork(UnitOfWork):
         self.ledger = SqliteLedgerRepository(conn)
         self.cash_sessions = SqliteCashSessionRepository(conn, self.track)
         self.sales = SqliteSaleRepository(conn, self.track)
+        self.sales_reports = SqliteSalesReportQueries(conn)
         return self
 
     def __exit__(self, *exc_info: object) -> None:

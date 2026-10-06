@@ -1,16 +1,55 @@
 """Migraciones versionadas con PRAGMA user_version.
 
 Para cambiar el esquema se agrega una entrada nueva al final de MIGRATIONS; nunca
-se edita una que ya se aplicó en un negocio.
+se edita una que ya se aplicó en un negocio. Una migración es un script SQL o una
+función que recibe la conexión (para transformar datos con las reglas del dominio).
 """
 
 from __future__ import annotations
 
+import sqlite3
+from collections.abc import Callable
+from decimal import Decimal
+
+from ....domain.payments import PaymentKind
+from ....domain.sales import SalePayment, allocate_change
+from ....domain.shared.values import Money
 from .connection import connect
 
 FK = "DEFERRABLE INITIALLY DEFERRED"
 
-MIGRATIONS: list[str] = [
+Migration = str | Callable[[sqlite3.Connection], None]
+
+
+def _store_applied_payment_amounts(conn: sqlite3.Connection) -> None:
+    """Guarda el monto neto (sin vueltas) de cada pago para que los reportes sumen en SQL."""
+    conn.execute("ALTER TABLE sale_payments ADD COLUMN applied_amount TEXT")
+    rows = conn.execute(
+        "SELECT p.sale_id, p.position, p.method_code, p.method_name, p.kind, p.amount, s.change_amount "
+        "FROM sale_payments p JOIN sales s ON s.id = p.sale_id ORDER BY p.sale_id, p.position"
+    ).fetchall()
+    by_sale: dict[str, list[sqlite3.Row]] = {}
+    for row in rows:
+        by_sale.setdefault(row["sale_id"], []).append(row)
+    updates = []
+    for sale_id, payment_rows in by_sale.items():
+        payments = [
+            SalePayment(
+                method_code=row["method_code"],
+                method_name=row["method_name"],
+                kind=PaymentKind(row["kind"]),
+                amount=Money(Decimal(row["amount"])),
+            )
+            for row in payment_rows
+        ]
+        change = Money(Decimal(payment_rows[0]["change_amount"]))
+        for row, applied in zip(payment_rows, allocate_change(payments, change), strict=True):
+            updates.append((str(applied.amount), sale_id, row["position"]))
+    conn.executemany("UPDATE sale_payments SET applied_amount = ? WHERE sale_id = ? AND position = ?", updates)
+    conn.execute("CREATE INDEX ix_sale_lines_product ON sale_lines(product_id)")
+
+
+MIGRATIONS: list[Migration] = [
     f"""
     CREATE TABLE settings (
         key   TEXT PRIMARY KEY,
@@ -176,6 +215,8 @@ MIGRATIONS: list[str] = [
     ALTER TABLE sales ADD COLUMN request_id TEXT;
     CREATE UNIQUE INDEX ux_sales_request_id ON sales(request_id) WHERE request_id IS NOT NULL;
     """,
+    # 3: montos netos por pago para reportes agregados en SQL
+    _store_applied_payment_amounts,
 ]
 
 
@@ -189,7 +230,17 @@ def migrate(database: str) -> int:
         for version, script in enumerate(MIGRATIONS, start=1):
             if version <= current:
                 continue
-            conn.executescript(f"BEGIN IMMEDIATE;\n{script}\nPRAGMA user_version = {version};\nCOMMIT;")
+            if isinstance(script, str):
+                conn.executescript(f"BEGIN IMMEDIATE;\n{script}\nPRAGMA user_version = {version};\nCOMMIT;")
+            else:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    script(conn)
+                    conn.execute(f"PRAGMA user_version = {version}")
+                    conn.execute("COMMIT")
+                except BaseException:
+                    conn.execute("ROLLBACK")
+                    raise
             current = version
         return current
     finally:

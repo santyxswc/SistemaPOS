@@ -20,7 +20,7 @@ from ....domain.catalog import Category, Product, Unit
 from ....domain.customers import Customer, LedgerEntry, LedgerEntryType
 from ....domain.inventory import MovementType, StockMovement
 from ....domain.payments import PaymentKind, PaymentMethodConfig
-from ....domain.sales import Sale, SaleLine, SalePayment, SaleStatus
+from ....domain.sales import Sale, SaleLine, SalePayment, SaleStatus, allocate_change
 from ....domain.settings import BusinessSettings
 from ....domain.shared.entity import AggregateRoot
 from ....domain.shared.values import Money, TaxRate
@@ -648,11 +648,14 @@ class SqliteSaleRepository:
             ],
         )
         self._conn.executemany(
-            "INSERT INTO sale_payments (sale_id, position, method_code, method_name, kind, amount) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO sale_payments (sale_id, position, method_code, method_name, kind, amount, applied_amount) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
-                (str(sale.id), position, p.method_code, p.method_name, p.kind.value, str(p.amount.amount))
-                for position, p in enumerate(sale.payments)
+                (str(sale.id), position, p.method_code, p.method_name, p.kind.value, str(p.amount.amount),
+                 str(applied.amount))
+                for position, (p, applied) in enumerate(
+                    zip(sale.payments, allocate_change(sale.payments, sale.change), strict=True)
+                )
             ],
         )
         self._track(sale)

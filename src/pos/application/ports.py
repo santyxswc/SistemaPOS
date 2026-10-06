@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
@@ -17,10 +19,12 @@ from ..domain.cash import CashSession
 from ..domain.catalog import Category, Product
 from ..domain.customers import Customer, LedgerEntry
 from ..domain.inventory import StockMovement
+from ..domain.payments import PaymentKind
 from ..domain.sales import Sale
 from ..domain.settings import BusinessSettings
 from ..domain.shared.entity import AggregateRoot
 from ..domain.shared.events import DomainEvent
+from ..domain.shared.values import Money
 from ..domain.users import User
 
 # --- Servicios técnicos -------------------------------------------------------
@@ -191,6 +195,63 @@ class SaleRepository(Protocol):
     ) -> list[Sale]: ...
 
 
+# --- Consultas de reportes (modelo de lectura) ----------------------------------------
+#
+# Los reportes no necesitan ventas completas: piden sumas. Separar la lectura de la
+# escritura (CQRS ligero) deja que cada base de datos agregue a su manera y que un
+# reporte de un año no cargue miles de ventas en memoria.
+
+
+@dataclass(frozen=True)
+class SalesFilter:
+    start: datetime | None = None  # inclusive, UTC
+    end: datetime | None = None  # exclusivo, UTC
+    cash_session_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class SalesTotals:
+    sales_count: int
+    voided_count: int
+    subtotal: Money
+    tax_total: Money
+    discount_total: Money
+    total: Money
+
+
+@dataclass(frozen=True)
+class PaymentTotal:
+    code: str
+    name: str
+    kind: PaymentKind
+    amount: Money
+
+
+@dataclass(frozen=True)
+class ProductSales:
+    product_id: UUID
+    sku: str
+    description: str
+    quantity: Decimal
+    total: Money
+
+
+class SalesReportQueries(Protocol):
+    """Todas las cifras cuentan solo ventas no anuladas, salvo `voided_count`."""
+
+    def totals(self, where: SalesFilter) -> SalesTotals: ...
+
+    def totals_by_payment_method(self, where: SalesFilter) -> list[PaymentTotal]:
+        """Lo realmente recibido por método (sin vueltas), de mayor a menor."""
+        ...
+
+    def sale_amounts(self, where: SalesFilter) -> list[tuple[datetime, Money]]:
+        """Fecha y total de cada venta, para agrupar por día o mes en la zona horaria del negocio."""
+        ...
+
+    def top_products(self, where: SalesFilter, limit: int) -> list[ProductSales]: ...
+
+
 # --- Unidad de trabajo -------------------------------------------------------------
 
 
@@ -211,6 +272,7 @@ class UnitOfWork(ABC):
     ledger: LedgerRepository
     cash_sessions: CashSessionRepository
     sales: SaleRepository
+    sales_reports: SalesReportQueries
 
     def __init__(self, publisher: EventPublisher | None = None, *, read_only: bool = False) -> None:
         self._publisher = publisher

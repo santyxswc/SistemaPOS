@@ -11,8 +11,7 @@ from ...domain.shared.values import Money
 from ...domain.users import Permission
 from ..actor import Actor
 from ..common import get_or_404, page_size
-from ..ports import Clock, UnitOfWork, UnitOfWorkFactory
-from .reports import PaymentTotal, summarize_payments
+from ..ports import Clock, PaymentTotal, SalesFilter, UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -25,14 +24,14 @@ class CashSessionReport:
 
 
 def build_cash_report(uow: UnitOfWork, session: CashSession) -> CashSessionReport:
-    sales = uow.sales.find(cash_session_id=session.id)
-    completed = [sale for sale in sales if not sale.is_voided]
+    where = SalesFilter(cash_session_id=session.id)
+    totals = uow.sales_reports.totals(where)
     return CashSessionReport(
         session=session,
-        sales_count=len(completed),
-        voided_count=len(sales) - len(completed),
-        sales_total=Money.sum(sale.total for sale in completed),
-        totals_by_method=summarize_payments(completed),
+        sales_count=totals.sales_count,
+        voided_count=totals.voided_count,
+        sales_total=totals.total,
+        totals_by_method=uow.sales_reports.totals_by_payment_method(where),
     )
 
 

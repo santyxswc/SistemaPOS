@@ -96,6 +96,20 @@ class SalePayment:
     amount: Money
 
 
+def allocate_change(payments: Sequence[SalePayment], change: Money) -> list[Money]:
+    """Monto neto de cada pago, en el mismo orden: las vueltas se descuentan de los pagos que pueden darlas."""
+    remaining = change
+    applied: list[Money] = []
+    for payment in payments:
+        amount = payment.amount
+        if remaining.is_positive and behavior_for(payment.kind).can_give_change:
+            deducted = min(amount, remaining)
+            amount -= deducted
+            remaining -= deducted
+        applied.append(amount)
+    return applied
+
+
 @dataclass(kw_only=True, eq=False)
 class Sale(AggregateRoot):
     number: int
@@ -179,17 +193,11 @@ class Sale(AggregateRoot):
 
     def applied_payments(self) -> list[SalePayment]:
         """Pagos netos: a los pagos que dan vueltas se les descuenta el cambio entregado."""
-        remaining_change = self.change
-        applied: list[SalePayment] = []
-        for payment in self.payments:
-            amount = payment.amount
-            if remaining_change.is_positive and behavior_for(payment.kind).can_give_change:
-                deducted = min(amount, remaining_change)
-                amount -= deducted
-                remaining_change -= deducted
-            if amount.is_positive:
-                applied.append(dataclasses.replace(payment, amount=amount))
-        return applied
+        return [
+            dataclasses.replace(payment, amount=amount)
+            for payment, amount in zip(self.payments, allocate_change(self.payments, self.change), strict=True)
+            if amount.is_positive
+        ]
 
     @property
     def cash_in_drawer(self) -> Money:

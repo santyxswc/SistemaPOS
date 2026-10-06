@@ -24,6 +24,7 @@ from ..actor import Actor
 from ..common import get_or_404, local_day_range, page_size, require_settings
 from ..ports import Clock, UnitOfWork, UnitOfWorkFactory
 from .cash import require_open_session
+from .invoicing import DisabledInvoiceOutbox, InvoiceOutbox
 
 
 @dataclass(frozen=True)
@@ -86,9 +87,10 @@ def _load_customer(uow: UnitOfWork, customer_id: UUID | None) -> Customer | None
 class CreateSale:
     """Registra una venta. Con request_id, repetir la petición no duplica la venta."""
 
-    def __init__(self, uow: UnitOfWorkFactory, clock: Clock) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, clock: Clock, outbox: InvoiceOutbox | None = None) -> None:
         self._uow = uow
         self._clock = clock
+        self._outbox = outbox or DisabledInvoiceOutbox()
 
     def execute(self, actor: Actor, command: CreateSaleCommand) -> Sale:
         actor.require(Permission.SELL)
@@ -183,6 +185,9 @@ class CreateSale:
                 sale_number=sale.number, cash_amount=sale.cash_in_drawer, user_id=actor.user_id, at=now
             )
             uow.cash_sessions.save(session)
+
+            # 4. Documento electrónico: queda en la bandeja en esta misma transacción
+            self._outbox.enqueue_sale(uow, sale)
             uow.commit()
         return sale
 
@@ -190,9 +195,10 @@ class CreateSale:
 class VoidSale:
     """Anula una venta y revierte inventario, fiado y efectivo."""
 
-    def __init__(self, uow: UnitOfWorkFactory, clock: Clock) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, clock: Clock, outbox: InvoiceOutbox | None = None) -> None:
         self._uow = uow
         self._clock = clock
+        self._outbox = outbox or DisabledInvoiceOutbox()
 
     def execute(self, actor: Actor, sale_id: UUID, reason: str) -> Sale:
         actor.require(Permission.VOID_SALES)
@@ -250,6 +256,7 @@ class VoidSale:
                 uow.cash_sessions.save(session)
 
             uow.sales.save(sale)
+            self._outbox.enqueue_void(uow, sale)
             uow.commit()
         return sale
 

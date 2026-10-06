@@ -19,6 +19,7 @@ from ..domain.cash import CashSession
 from ..domain.catalog import Category, Product
 from ..domain.customers import Customer, LedgerEntry
 from ..domain.inventory import StockMovement
+from ..domain.invoicing import DocumentStatus, ElectronicDocument, IssuedDocument
 from ..domain.licensing import License
 from ..domain.payments import PaymentKind
 from ..domain.sales import Sale
@@ -109,9 +110,18 @@ class BackupService(Protocol):
 
 
 class InvoiceProvider(Protocol):
-    """Punto de extensión para facturación electrónica (proveedor autorizado por la DIAN)."""
+    """Proveedor tecnológico autorizado por la DIAN que emite los documentos electrónicos.
 
-    def issue_for_sale(self, sale_id: UUID) -> None: ...
+    Cada proveedor (Siigo, Alegra, The Factory HKA...) es un adaptador con este método.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    def issue(self, document: ElectronicDocument, sale: Sale, settings: BusinessSettings) -> IssuedDocument:
+        """Envía el documento. Lanza InvoiceRejected si lo rechazan por sus datos; cualquier
+        otra excepción se toma como falla temporal y el documento se reintenta."""
+        ...
 
 
 # --- Repositorios ---------------------------------------------------------------
@@ -311,6 +321,28 @@ class SaleRepository(Protocol):
     ) -> list[Sale]: ...
 
 
+class ElectronicDocumentRepository(Protocol):
+    def add(self, document: ElectronicDocument) -> None: ...
+
+    def save(self, document: ElectronicDocument) -> None: ...
+
+    def get(self, document_id: UUID) -> ElectronicDocument | None: ...
+
+    def list_for_sale(self, sale_id: UUID) -> list[ElectronicDocument]: ...
+
+    def list_due(self, now: datetime, *, limit: int) -> list[ElectronicDocument]:
+        """Pendientes cuyo próximo intento ya llegó, del más antiguo al más nuevo."""
+        ...
+
+    def find(
+        self, *, statuses: Collection[DocumentStatus] | None = None, limit: int = 50, offset: int = 0
+    ) -> list[ElectronicDocument]:
+        """Del más reciente al más antiguo."""
+        ...
+
+    def count_by_status(self) -> dict[DocumentStatus, int]: ...
+
+
 # --- Consultas de reportes (modelo de lectura) ----------------------------------------
 #
 # Los reportes no necesitan ventas completas: piden sumas. Separar la lectura de la
@@ -411,6 +443,7 @@ class UnitOfWork(ABC):
     suppliers: SupplierRepository
     supplier_ledger: SupplierLedgerRepository
     purchases: PurchaseRepository
+    documents: ElectronicDocumentRepository
     cash_sessions: CashSessionRepository
     sales: SaleRepository
     sales_reports: SalesReportQueries

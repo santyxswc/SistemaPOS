@@ -17,6 +17,7 @@ from .routes import (
     catalog,
     customers,
     inventory,
+    invoicing,
     licensing,
     reports,
     sales,
@@ -42,7 +43,7 @@ def create_app(container: Container) -> Flask:
     register_error_handlers(app)
     _register_cors(app, container.config.cors_origins)
     modules = (setup, auth, users, settings, licensing, backups, catalog, inventory, cash, sales, customers,
-               suppliers, reports)
+               suppliers, reports, invoicing)
     for module in modules:
         app.register_blueprint(module.bp, url_prefix=API_PREFIX)
 

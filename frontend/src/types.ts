@@ -315,6 +315,28 @@ export interface Payables {
   suppliers: { supplier: Supplier; overdue: string; next_due_date: string | null }[];
 }
 
+export interface ElectronicDocument {
+  id: string;
+  sale_id: string;
+  sale_number: number;
+  kind: "invoice" | "credit_note";
+  status: "pending" | "accepted" | "rejected" | "failed";
+  attempts: number;
+  next_attempt_at: string | null;
+  last_error: string | null;
+  cufe: string | null;
+  qr_data: string | null;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface InvoicingStatus {
+  enabled: boolean;
+  provider: string | null;
+  needs_attention: number;
+  counts: Record<ElectronicDocument["status"], number>;
+}
+
 export interface Items<T> {
   items: T[];
 }

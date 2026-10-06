@@ -80,11 +80,16 @@ def _serve(container: Container, host: str, port: int) -> None:
 
     from .presentation.http.app import create_app
 
+    for worker in container.background_workers:
+        worker.start()
     try:
         serve(create_app(container), host=host, port=port, threads=8)
     except OSError as error:
         logger.error("No se pudo usar el puerto %s: %s", port, error)
         sys.exit(f"El puerto {port} está ocupado por otro programa. Cambie POS_PORT en {data_root() / '.env'}")
+    finally:
+        for worker in container.background_workers:
+            worker.stop()
 
 
 def _ask_admin(container: Container, username: str | None, full_name: str | None) -> None:
@@ -193,6 +198,10 @@ def runserver(args: argparse.Namespace) -> None:
     if container.config.is_development:
         from .presentation.http.app import create_app
 
+        # Con recarga automática, Flask corre el código en un proceso hijo: las tareas van solo allí.
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            for worker in container.background_workers:
+                worker.start()
         create_app(container).run(host=host, port=port, debug=True)
         return
     logger.info("POS escuchando en %s", url)

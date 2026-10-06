@@ -12,6 +12,7 @@ import sqlite3
 
 from ....application.ports import EventPublisher, UnitOfWork
 from .connection import connect
+from .document_repository import SqliteElectronicDocumentRepository
 from .report_queries import SqliteSalesReportQueries
 from .repositories import (
     SqliteCashSessionRepository,
@@ -57,6 +58,7 @@ class SqliteUnitOfWork(UnitOfWork):
         self.suppliers = SqliteSupplierRepository(conn, self.track)
         self.supplier_ledger = SqliteSupplierLedgerRepository(conn)
         self.purchases = SqlitePurchaseRepository(conn, self.track)
+        self.documents = SqliteElectronicDocumentRepository(conn, self.track)
         self.cash_sessions = SqliteCashSessionRepository(conn, self.track)
         self.sales = SqliteSaleRepository(conn, self.track)
         self.sales_reports = SqliteSalesReportQueries(conn)

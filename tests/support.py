@@ -68,10 +68,16 @@ class PosTestCase(unittest.TestCase):
             business_name="Tienda de prueba",
         )
         self.c = build_container(
-            config, clock=None if self.use_real_clock else self.clock, license_verifier=TEST_LICENSE_VERIFIER
+            config,
+            clock=None if self.use_real_clock else self.clock,
+            license_verifier=TEST_LICENSE_VERIFIER,
+            invoice_provider=self.make_invoice_provider(),
         )
         admin = self.c.bootstrap_admin.execute(username="admin", full_name="Dueña", password=ADMIN_PASSWORD)
         self.admin = Actor.from_user(admin)
+
+    def make_invoice_provider(self):  # noqa: ANN201 - las pruebas de facturación devuelven uno falso
+        return None
 
     def make_cashier(self, username: str = "cajero") -> Actor:
         user = self.c.create_user.execute(

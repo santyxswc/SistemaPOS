@@ -432,3 +432,48 @@ describe("permisos por rol", () => {
     expect((put.body as { permissions: string[] }).permissions.sort()).toEqual(["operate_cash", "sell", "view_reports"]);
   });
 });
+
+describe("facturación electrónica", () => {
+  const ADMIN: Me = {
+    id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+    permissions: ["manage_settings", "view_reports", "sell", "operate_cash"],
+  };
+  const REJECTED = {
+    id: "d-1", sale_id: "s-1", sale_number: 12, kind: "invoice", status: "rejected", attempts: 1, next_attempt_at: null,
+    last_error: "NIT del adquiriente inválido", cufe: null, qr_data: null, accepted_at: null, created_at: "2026-10-06T15:00:00Z",
+  };
+
+  it("avisa de un documento rechazado y lo reintenta desde Ajustes", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    let retried = false;
+    const calls = mockServer((call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      const counts = { pending: retried ? 1 : 0, accepted: 3, rejected: retried ? 0 : 1, failed: 0 };
+      if (route === "GET /auth/me") return { body: ADMIN };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /license") return { body: { needs_attention: false } };
+      if (route === "GET /backups") return { body: { items: [] } };
+      if (route === "GET /invoicing")
+        return { body: { enabled: true, provider: "Simulado", needs_attention: retried ? 0 : 1, counts } };
+      if (route === "GET /invoicing/documents")
+        return { body: { items: [retried ? { ...REJECTED, status: "pending", attempts: 0 } : REJECTED] } };
+      if (route === "POST /invoicing/documents/d-1/retry") {
+        retried = true;
+        return { body: { ...REJECTED, status: "pending" } };
+      }
+      return { status: 404, body: { error: { code: "not_found", message: "no simulado" } } };
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const banner = await screen.findByText(/Hay 1 documento electrónico/);
+    await user.click(within(banner.parentElement!).getByRole("button", { name: "Revisar" }));
+    const card = await screen.findByRole("region", { name: "Facturación electrónica" });
+    expect(await within(card).findByText("NIT del adquiriente inválido")).toBeTruthy();
+    await user.click(within(card).getByRole("button", { name: "Reintentar" }));
+
+    expect(await screen.findByText("Venta #12: se intentará enviar de nuevo")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/Hay 1 documento electrónico/)).toBeNull());
+    expect(calls.some((c) => c.method === "POST" && c.path === "/invoicing/documents/d-1/retry")).toBe(true);
+  });
+});

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .application.event_handlers import ElectronicInvoicingHandler, log_low_stock
+from .application.event_handlers import log_low_stock
 from .application.ports import Clock, InvoiceProvider, LicenseVerifier, UnitOfWorkFactory
 from .application.use_cases import (
     backups,
@@ -18,6 +18,7 @@ from .application.use_cases import (
     catalog_import,
     customers,
     inventory,
+    invoicing,
     licensing,
     reports,
     sales,
@@ -28,10 +29,11 @@ from .application.use_cases import (
 from .config import AppConfig
 from .domain.cash import CashSessionClosed
 from .domain.catalog import StockLow
-from .domain.sales import SaleCompleted
+from .domain.invoicing import DocumentQueued
+from .infrastructure.background import PeriodicWorker
 from .infrastructure.clock import SystemClock
 from .infrastructure.events import SyncEventBus
-from .infrastructure.invoicing import NoInvoiceProvider
+from .infrastructure.invoicing import create_invoice_provider
 from .infrastructure.license_key import PUBLIC_KEY
 from .infrastructure.licensing import Ed25519LicenseVerifier
 from .infrastructure.persistence.sqlite.backup import SqliteBackupService
@@ -115,6 +117,12 @@ class Container:
     get_sales_summary: reports.GetSalesSummary
     get_top_products: reports.GetTopProducts
     export_sales_report: reports.ExportSalesReport
+    # facturación electrónica
+    get_invoicing_status: invoicing.GetInvoicingStatus
+    list_electronic_documents: invoicing.ListElectronicDocuments
+    retry_electronic_document: invoicing.RetryElectronicDocument
+    # tareas que corren junto al servidor (las inicia la línea de comandos, no las pruebas)
+    background_workers: tuple[PeriodicWorker, ...] = ()
 
 
 def build_container(
@@ -131,12 +139,22 @@ def build_container(
 
     bus = SyncEventBus()
     bus.subscribe(StockLow, log_low_stock)
-    bus.subscribe(SaleCompleted, ElectronicInvoicingHandler(invoice_provider or NoInvoiceProvider()))
 
     migrate(config.database_path)
 
     def uow(*, read_only: bool = False) -> SqliteUnitOfWork:
         return SqliteUnitOfWork(config.database_path, bus, read_only=read_only)
+
+    # Facturación electrónica: con proveedor, cada venta deja su documento en la bandeja de salida.
+    provider = invoice_provider or create_invoice_provider(config.invoice_provider)
+    outbox: invoicing.InvoiceOutbox = invoicing.DisabledInvoiceOutbox()
+    workers: list[PeriodicWorker] = []
+    if provider is not None:
+        outbox = invoicing.TransactionalInvoiceOutbox()
+        process = invoicing.ProcessInvoiceOutbox(uow, provider, clock)
+        sender = PeriodicWorker("envío de documentos electrónicos", process.execute)
+        bus.subscribe(DocumentQueued, lambda _event: sender.wake())
+        workers.append(sender)
 
     backup_service = SqliteBackupService(config.database_path, Path(config.database_path).parent / "backups")
     run_backup = backups.RunBackup(uow, backup_service, clock)
@@ -187,8 +205,8 @@ def build_container(
         close_cash_session=cash.CloseCashSession(uow, clock),
         get_cash_session_report=cash.GetCashSessionReport(uow),
         list_cash_sessions=cash.ListCashSessions(uow),
-        create_sale=sales.CreateSale(uow, clock),
-        void_sale=sales.VoidSale(uow, clock),
+        create_sale=sales.CreateSale(uow, clock, outbox),
+        void_sale=sales.VoidSale(uow, clock, outbox),
         get_sale=sales.GetSale(uow),
         list_sales=sales.ListSales(uow),
         create_customer=customers.CreateCustomer(uow, clock),
@@ -210,4 +228,8 @@ def build_container(
         get_sales_summary=sales_summary,
         get_top_products=reports.GetTopProducts(uow),
         export_sales_report=reports.ExportSalesReport(uow, sales_summary),
+        get_invoicing_status=invoicing.GetInvoicingStatus(uow, provider),
+        list_electronic_documents=invoicing.ListElectronicDocuments(uow),
+        retry_electronic_document=invoicing.RetryElectronicDocument(uow, clock),
+        background_workers=tuple(workers),
     )

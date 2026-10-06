@@ -276,6 +276,28 @@ MIGRATIONS: list[Migration] = [
     );
     CREATE INDEX ix_supplier_ledger_supplier ON supplier_ledger(supplier_id, created_at);
     """,
+    # 5: bandeja de salida de documentos electrónicos (facturación DIAN)
+    f"""
+    CREATE TABLE electronic_documents (
+        id                 TEXT PRIMARY KEY,
+        sale_id            TEXT NOT NULL REFERENCES sales(id) {FK},
+        sale_number        INTEGER NOT NULL,
+        kind               TEXT NOT NULL,
+        status             TEXT NOT NULL,
+        attempts           INTEGER NOT NULL,
+        next_attempt_at    TEXT,
+        last_error         TEXT NOT NULL,
+        cufe               TEXT,
+        qr_data            TEXT NOT NULL,
+        provider_reference TEXT NOT NULL,
+        accepted_at        TEXT,
+        created_at         TEXT NOT NULL
+    );
+    -- Un documento de cada tipo por venta: la venta y, si se anula, su nota crédito.
+    CREATE UNIQUE INDEX ux_electronic_documents_sale_kind ON electronic_documents(sale_id, kind);
+    CREATE INDEX ix_electronic_documents_due ON electronic_documents(next_attempt_at) WHERE status = 'pending';
+    CREATE INDEX ix_electronic_documents_status ON electronic_documents(status, created_at);
+    """,
 ]
 
 

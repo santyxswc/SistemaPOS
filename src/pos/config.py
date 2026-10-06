@@ -79,6 +79,7 @@ class AppConfig:
     business_name: str = "Mi negocio"
     host: str = "127.0.0.1"
     port: int = 8000
+    invoice_provider: str = ""  # facturación electrónica: vacío = desactivada (ver infrastructure/invoicing.py)
 
     @property
     def is_development(self) -> bool:
@@ -106,4 +107,5 @@ class AppConfig:
             business_name=env.get("POS_BUSINESS_NAME", "Mi negocio"),
             host=env.get("POS_HOST", "127.0.0.1"),
             port=int(env.get("POS_PORT", "8000")),
+            invoice_provider=env.get("POS_INVOICE_PROVIDER", "").strip(),
         )

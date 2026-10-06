@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { api } from "../api";
 import { BackupsCard } from "../components/Backups";
+import { InvoicingCard } from "../components/Invoicing";
 import { LicenseCard } from "../components/License";
 import { ErrorAlert, Field, toast, useAction } from "../components/ui";
 import { useSession } from "../session";
@@ -154,6 +155,7 @@ export function SettingsPage() {
         </section>
       </form>
       <BackupsCard />
+      <InvoicingCard />
       <LicenseCard />
     </>
   );

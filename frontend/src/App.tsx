@@ -1,5 +1,6 @@
 import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken, setUnauthorizedHandler } from "./api";
+import { InvoicingBanner } from "./components/Invoicing";
 import { LicenseBanner } from "./components/License";
 import { Toaster } from "./components/ui";
 import { CashPage } from "./pages/Cash";
@@ -182,7 +183,12 @@ function Shell(props: { me: Me; settings: Settings; logout: () => void; reloadSe
           </div>
         </nav>
         <main className="main">
-          {session.can("manage_settings") && <LicenseBanner onOpenSettings={() => navigate("ajustes")} />}
+          {session.can("manage_settings") && (
+            <>
+              <LicenseBanner onOpenSettings={() => navigate("ajustes")} />
+              <InvoicingBanner onOpenSettings={() => navigate("ajustes")} />
+            </>
+          )}
           <Page key={current.path} />
         </main>
       </div>

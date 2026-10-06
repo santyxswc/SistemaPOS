@@ -12,6 +12,7 @@ from ...application.ports import BackupFile, BackupResult
 from ...application.use_cases.cash import CashSessionReport
 from ...application.use_cases.catalog_import import ProductImportReport
 from ...application.use_cases.customers import CustomerStatement
+from ...application.use_cases.invoicing import InvoicingStatus
 from ...application.use_cases.reports import PaymentTotal, ProductSales, SalesSummary
 from ...application.use_cases.suppliers import (
     PayablesSummary,
@@ -23,6 +24,7 @@ from ...domain.cash import CashMovement, CashSession
 from ...domain.catalog import Category, Product
 from ...domain.customers import Customer, LedgerEntry
 from ...domain.inventory import StockMovement
+from ...domain.invoicing import ElectronicDocument
 from ...domain.licensing import LicenseStatus
 from ...domain.sales import Sale
 from ...domain.settings import BusinessSettings
@@ -442,4 +444,30 @@ def role_permissions(value: RolePermissions) -> Json:
             {"code": p.value, "label": PERMISSION_LABELS[p], "grantable": p in GRANTABLE_PERMISSIONS}
             for p in Permission
         ],
+    }
+
+
+def electronic_document(value: ElectronicDocument) -> Json:
+    return {
+        "id": uid(value.id),
+        "sale_id": uid(value.sale_id),
+        "sale_number": value.sale_number,
+        "kind": value.kind.value,
+        "status": value.status.value,
+        "attempts": value.attempts,
+        "next_attempt_at": ts(value.next_attempt_at),
+        "last_error": value.last_error or None,
+        "cufe": value.cufe,
+        "qr_data": value.qr_data or None,
+        "accepted_at": ts(value.accepted_at),
+        "created_at": ts(value.created_at),
+    }
+
+
+def invoicing_status(value: InvoicingStatus) -> Json:
+    return {
+        "enabled": value.enabled,
+        "provider": value.provider,
+        "needs_attention": value.needs_attention,
+        "counts": {status.value: count for status, count in value.counts.items()},
     }

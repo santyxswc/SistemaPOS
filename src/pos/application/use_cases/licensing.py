@@ -17,8 +17,7 @@ logger = logging.getLogger("pos.licensing")
 class LicensePolicy:
     """Servicio de aplicación: lee la licencia guardada y decide qué permite hoy.
 
-    Lo comparten los casos de uso que necesitan respetar el plan (usuarios hoy;
-    mañana, funciones que se vendan aparte).
+    Es el `UserQuota` de la instalación cuando el módulo de licencias está encendido.
     """
 
     def __init__(self, verifier: LicenseVerifier, clock: Clock) -> None:
@@ -35,7 +34,7 @@ class LicensePolicy:
             today=now.astimezone(tz).date(),
         )
 
-    def ensure_user_quota(self, uow: UnitOfWork) -> None:
+    def ensure_can_activate(self, uow: UnitOfWork) -> None:
         """Lanza BusinessRuleViolation si activar un usuario más excede lo que permite la licencia."""
         status = self.status(uow)
         limit = status.max_users

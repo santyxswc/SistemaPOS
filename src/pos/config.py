@@ -1,7 +1,8 @@
 """Configuración técnica desde variables de entorno.
 
-Lo técnico (base de datos, llaves, puertos) vive aquí; lo del negocio (impuestos,
-métodos de pago, usuarios del plan) vive en BusinessSettings y se cambia por la API.
+Lo técnico (base de datos, llaves, puertos, módulos contratados) vive aquí y lo cambia
+el técnico; lo del negocio (impuestos, métodos de pago) vive en BusinessSettings y lo
+cambia el dueño desde Ajustes.
 """
 
 from __future__ import annotations
@@ -14,20 +15,33 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .application.modules import Module, ModuleSet, parse_module_names
+from .domain.shared.errors import ValidationError
+
 logger = logging.getLogger("pos.config")
 
 
 def load_dotenv(path: str | Path = ".env") -> None:
     """Carga líneas KEY=VALUE de un archivo .env sin pisar variables ya definidas."""
-    file = Path(path)
-    if not file.is_file():
-        return
-    for raw_line in file.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    for key, value in read_env_file(Path(path)).items():
+        os.environ.setdefault(key, value)
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """Las variables de un .env (sin tocar las del proceso)."""
+    values: dict[str, str] = {}
+    if path.is_file():
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def set_env_values(path: Path, values: Mapping[str, str]) -> None:
+    """Cambia o agrega variables en un .env existente, conservando comentarios y el resto."""
+    path.write_text(render_env(path.read_text(encoding="utf-8"), values), encoding="utf-8")
 
 
 def render_env(template: str, values: Mapping[str, str]) -> str:
@@ -81,6 +95,7 @@ class AppConfig:
     port: int = 8000
     invoice_provider: str = ""  # facturación electrónica: vacío = desactivada (ver infrastructure/invoicing.py)
     update_repository: str = ""  # "usuario/repo" de GitHub donde se publican las versiones; vacío = no avisar
+    modules: ModuleSet = dataclasses.field(default_factory=ModuleSet.defaults)
 
     @property
     def is_development(self) -> bool:
@@ -110,11 +125,25 @@ class AppConfig:
             port=int(env.get("POS_PORT", "8000")),
             invoice_provider=env.get("POS_INVOICE_PROVIDER", "").strip(),
             update_repository=_update_repository(env),
+            modules=modules_from_env(env),
         )
 
 
+def modules_from_env(env: Mapping[str, str]) -> ModuleSet:
+    """POS_MODULES_DISABLED apaga módulos de fábrica; POS_MODULES_ENABLED enciende los que vienen apagados."""
+    try:
+        disable = parse_module_names(env.get("POS_MODULES_DISABLED", ""))
+        enable = parse_module_names(env.get("POS_MODULES_ENABLED", ""))
+    except ValidationError as error:
+        raise RuntimeError(f"Revise POS_MODULES_DISABLED / POS_MODULES_ENABLED en el .env: {error.message}") from None
+    if env.get("POS_UPDATE_CHECK", "1").strip().lower() in ("0", "false", "no"):  # nombre anterior, se respeta
+        disable.add(Module.UPDATES)
+    modules = ModuleSet.configure(disable=disable, enable=enable)
+    for module in enable - modules.enabled - disable:
+        logger.warning("El módulo «%s» queda apagado porque necesita «%s»", module, modules.blocked_by(module))
+    return modules
+
+
 def _update_repository(env: Mapping[str, str]) -> str:
-    """POS_UPDATE_CHECK=0 apaga el aviso; POS_UPDATE_REPO cambia el repositorio (p. ej. una copia propia)."""
-    if env.get("POS_UPDATE_CHECK", "1").strip().lower() in ("0", "false", "no"):
-        return ""
+    """POS_UPDATE_REPO cambia el repositorio donde se buscan versiones nuevas (p. ej. una copia propia)."""
     return env.get("POS_UPDATE_REPO", "santyxswc/SistemaPOS").strip()

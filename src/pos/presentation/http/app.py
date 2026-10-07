@@ -7,18 +7,22 @@ from typing import TYPE_CHECKING
 from flask import Flask, Response, request
 
 from ... import __version__
+from ...application.modules import Module
 from ..web import register_web
 from .context import CONTAINER_KEY
 from .errors import register_error_handlers
 from .routes import (
     auth,
     backups,
+    branding,
     cash,
     catalog,
+    catalog_files,
     customers,
     inventory,
     invoicing,
     licensing,
+    modules,
     printing,
     reports,
     sales,
@@ -33,6 +37,21 @@ if TYPE_CHECKING:
 
 API_PREFIX = "/api/v1"
 
+# El núcleo: lo que tiene cualquier negocio.
+CORE_ROUTES = (setup, auth, modules, branding, users, settings, backups, catalog, inventory, cash, sales)
+
+# Las rutas de cada módulo opcional solo existen si el módulo está encendido para este cliente.
+# Los módulos que no aparecen aquí (fiado, descuentos, permisos...) se apagan por permisos.
+OPTIONAL_ROUTES = {
+    Module.CUSTOMERS: (customers,),
+    Module.SUPPLIERS: (suppliers,),
+    Module.REPORTS: (reports,),
+    Module.SPREADSHEETS: (catalog_files,),
+    Module.DIRECT_PRINTING: (printing,),
+    Module.INVOICING: (invoicing,),
+    Module.LICENSING: (licensing,),
+}
+
 
 def create_app(container: Container) -> Flask:
     app = Flask("pos", static_folder=None)
@@ -43,10 +62,12 @@ def create_app(container: Container) -> Flask:
 
     register_error_handlers(app)
     _register_cors(app, container.config.cors_origins)
-    modules = (setup, auth, users, settings, licensing, backups, catalog, inventory, cash, sales, customers,
-               suppliers, reports, invoicing, printing)
-    for module in modules:
-        app.register_blueprint(module.bp, url_prefix=API_PREFIX)
+    route_modules = [*CORE_ROUTES]
+    for module, routes in OPTIONAL_ROUTES.items():
+        if container.modules.is_enabled(module):
+            route_modules.extend(routes)
+    for routes in route_modules:
+        app.register_blueprint(routes.bp, url_prefix=API_PREFIX)
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -81,7 +102,7 @@ def _register_cors(app: Flask, origins: tuple[str, ...]) -> None:
         if origin and (origin in origins or "*" in origins):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, OPTIONS"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
             response.headers["Access-Control-Max-Age"] = "600"
             response.vary.add("Origin")
         return response

@@ -51,7 +51,8 @@ def update_user(user_id: UUID):
 @bp.get("/roles")
 @authenticated
 def get_roles():
-    return presenters.role_permissions(container().get_role_permissions.execute(current_actor()))
+    policy = container().get_role_permissions.execute(current_actor())
+    return presenters.role_permissions(policy, container().modules.available_permissions)
 
 
 @bp.put("/roles/<role>")
@@ -64,4 +65,4 @@ def update_role(role: str):
     if not body.boolean("reset", default=False):
         permissions = {parse_enum(Permission, code, "permiso") for code in body.strings("permissions")}
     policy = container().update_role_permissions.execute(current_actor(), parse_enum(Role, role, "rol"), permissions)
-    return presenters.role_permissions(policy)
+    return presenters.role_permissions(policy, container().modules.available_permissions)

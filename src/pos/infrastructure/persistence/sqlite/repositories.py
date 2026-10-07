@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from ....domain.branding import Logo
 from ....domain.cash import CashMovement, CashMovementType, CashSession, CashSessionStatus
 from ....domain.catalog import Category, Product, Unit
 from ....domain.customers import Customer, LedgerEntry, LedgerEntryType
@@ -137,6 +138,30 @@ class SqliteSettingsRepository:
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (self._KEY, json.dumps(data, ensure_ascii=False)),
         )
+
+
+class SqliteLogoRepository:
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self) -> Logo | None:
+        row = self._conn.execute("SELECT content_type, data, updated_at FROM business_logo WHERE id = 1").fetchone()
+        if row is None:
+            return None
+        return Logo(content_type=row["content_type"], data=bytes(row["data"]), updated_at=_dt(row["updated_at"]))
+
+    def save(self, logo: Logo) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO business_logo (id, content_type, data, updated_at) VALUES (1, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                content_type = excluded.content_type, data = excluded.data, updated_at = excluded.updated_at
+            """,
+            (logo.content_type, logo.data, _ts(logo.updated_at)),
+        )
+
+    def delete(self) -> None:
+        self._conn.execute("DELETE FROM business_logo")
 
 
 class SqliteLicenseRepository:

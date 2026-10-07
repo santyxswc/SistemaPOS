@@ -8,7 +8,8 @@
     init             instalación desde la consola: configuración, base de datos y administrador
     create-admin     crea el primer administrador
     reset-password   asigna una contraseña nueva a un usuario (soporte: el dueño la olvidó)
-    license          muestra el estado de la licencia o instala un código
+    modules          lista los módulos de este cliente; `modules off proveedores` / `modules on licencias`
+    license          muestra el estado de la licencia o instala un código (módulo «licencias»)
     runserver        inicia solo el servidor (POS_ENV=development para modo desarrollo)
     backup           copia de seguridad de la base de datos
 """
@@ -29,8 +30,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from . import __version__
+from .application.modules import CATALOG, Module, parse_module_names
 from .bootstrap import Container, build_container
-from .config import AppConfig, ensure_env_file, load_config
+from .config import AppConfig, ensure_env_file, load_config, modules_from_env, read_env_file, set_env_values
 from .domain.shared.errors import DomainError
 from .infrastructure.persistence.sqlite.backup import backup_database
 from .paths import data_root, is_frozen, resource_root
@@ -269,8 +271,42 @@ def reset_password(args: argparse.Namespace) -> None:
     print("Si el sistema estaba bloqueado por intentos fallidos, ciérrelo y ábralo de nuevo.")
 
 
+def modules_command(args: argparse.Namespace) -> None:
+    """El técnico enciende o apaga módulos de este cliente; quedan en el .env de su carpeta de datos."""
+    env_file = data_root() / ".env"
+    if not env_file.exists():
+        ensure_env_file(env_file, _env_template())
+    values = read_env_file(env_file)
+    if args.action in ("on", "off"):
+        if not args.names:
+            sys.exit("Escriba qué módulos, p. ej.: modules off proveedores reportes")
+        chosen = parse_module_names(",".join(args.names))
+        disabled = parse_module_names(values.get("POS_MODULES_DISABLED", ""))
+        enabled = parse_module_names(values.get("POS_MODULES_ENABLED", ""))
+        defaults = {info.module for info in CATALOG if info.enabled_by_default}
+        if args.action == "off":
+            disabled |= chosen & defaults
+            enabled -= chosen
+        else:
+            disabled -= chosen
+            enabled |= chosen - defaults
+        values["POS_MODULES_DISABLED"] = ",".join(sorted(m.value for m in disabled))
+        values["POS_MODULES_ENABLED"] = ",".join(sorted(m.value for m in enabled))
+        set_env_values(env_file, {key: values[key] for key in ("POS_MODULES_DISABLED", "POS_MODULES_ENABLED")})
+        print(f"Guardado en {env_file}. Cierre y abra el punto de venta para aplicar el cambio.\n")
+    modules = modules_from_env(values)
+    for info in CATALOG:
+        state = "encendido" if modules.is_enabled(info.module) else "apagado"
+        blocked = modules.blocked_by(info.module)
+        note = f" (necesita «{blocked}»)" if blocked else ""
+        print(f"  {info.module.value:<16}{state:<10} {info.name}{note}")
+
+
 def license_command(args: argparse.Namespace) -> None:
     container = _container()
+    if not container.modules.is_enabled(Module.LICENSING):
+        sys.exit("El módulo de licencias está apagado en este sistema: no hay límite de usuarios.\n"
+                 "Para usarlo: modules on licencias")
     if args.code:
         status = container.install_license.execute_from_console(args.code)
         print("Licencia instalada.")
@@ -354,6 +390,11 @@ def build_parser() -> argparse.ArgumentParser:
     reset = commands.add_parser("reset-password", help="Asigna una contraseña nueva (el dueño la olvidó)")
     reset.add_argument("--username", help="Usuario (si no lo sabe, el error lista los administradores)")
     reset.set_defaults(handler=reset_password)
+
+    mods = commands.add_parser("modules", help="Módulos de este cliente: listar, encender (on) o apagar (off)")
+    mods.add_argument("action", nargs="?", choices=("list", "on", "off"), default="list")
+    mods.add_argument("names", nargs="*", help="Módulos, p. ej.: proveedores reportes")
+    mods.set_defaults(handler=modules_command)
 
     lic = commands.add_parser("license", help="Estado de la licencia o instalación de un código")
     lic.add_argument("code", nargs="?", help="Código de licencia enviado por el proveedor")

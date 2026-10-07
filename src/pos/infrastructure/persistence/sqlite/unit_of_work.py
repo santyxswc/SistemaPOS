@@ -20,6 +20,7 @@ from .repositories import (
     SqliteCustomerRepository,
     SqliteLedgerRepository,
     SqliteLicenseRepository,
+    SqliteLogoRepository,
     SqliteProductRepository,
     SqliteRolePermissionsRepository,
     SqliteSaleRepository,
@@ -47,6 +48,7 @@ class SqliteUnitOfWork(UnitOfWork):
         self._conn = conn
         self.settings = SqliteSettingsRepository(conn)
         self.licensing = SqliteLicenseRepository(conn)
+        self.logo = SqliteLogoRepository(conn)
         self.roles = SqliteRolePermissionsRepository(conn)
         self.sequences = SqliteSequenceRepository(conn)
         self.users = SqliteUserRepository(conn, self.track)

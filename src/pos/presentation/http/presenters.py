@@ -439,8 +439,11 @@ def payables_summary(value: PayablesSummary) -> Json:
     }
 
 
-def role_permissions(value: RolePermissions) -> Json:
-    """Lo que puede hacer cada rol y la lista de permisos con su nombre para la pantalla."""
+def role_permissions(value: RolePermissions, available: frozenset[Permission]) -> Json:
+    """Lo que puede hacer cada rol y la lista de permisos con su nombre para la pantalla.
+
+    Solo aparecen los permisos de los módulos encendidos (`available`).
+    """
     return {
         "roles": [
             {
@@ -448,9 +451,10 @@ def role_permissions(value: RolePermissions) -> Json:
                 "label": ROLE_LABELS[role],
                 "editable": role in EDITABLE_ROLES,
                 "customized": value.is_customized(role),
-                "permissions": sorted(p.value for p in value.for_role(role)),
+                "permissions": sorted(p.value for p in value.for_role(role) & available),
                 "default_permissions": sorted(
-                    p.value for p in (frozenset(Permission) if role is Role.ADMIN else ROLE_PERMISSIONS[role])
+                    p.value
+                    for p in (frozenset(Permission) if role is Role.ADMIN else ROLE_PERMISSIONS[role]) & available
                 ),
             }
             for role in Role
@@ -458,6 +462,7 @@ def role_permissions(value: RolePermissions) -> Json:
         "permissions": [
             {"code": p.value, "label": PERMISSION_LABELS[p], "grantable": p in GRANTABLE_PERMISSIONS}
             for p in Permission
+            if p in available
         ],
     }
 

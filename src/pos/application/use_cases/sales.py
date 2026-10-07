@@ -22,6 +22,7 @@ from ...domain.shared.values import Money
 from ...domain.users import Permission
 from ..actor import Actor
 from ..common import get_or_404, local_day_range, page_size, require_settings
+from ..modules import Module, ModuleSet
 from ..ports import Clock, UnitOfWork, UnitOfWorkFactory
 from .cash import require_open_session
 from .invoicing import DisabledInvoiceOutbox, InvoiceOutbox
@@ -71,9 +72,9 @@ def _previous_attempt(uow: UnitOfWork, actor: Actor, request_id: str | None) -> 
     return sale
 
 
-def _resolve_payment(settings: BusinessSettings, payment: PaymentInput) -> SalePayment:
+def _resolve_payment(settings: BusinessSettings, payment: PaymentInput, *, credit_available: bool) -> SalePayment:
     method = settings.payment_method(payment.method)
-    if method.kind is PaymentKind.CREDIT and not settings.credit_sales_enabled:
+    if method.kind is PaymentKind.CREDIT and not (credit_available and settings.credit_sales_enabled):
         raise BusinessRuleViolation("Las ventas fiadas están desactivadas en este negocio")
     return SalePayment(method_code=method.code, method_name=method.name, kind=method.kind, amount=payment.amount)
 
@@ -87,10 +88,17 @@ def _load_customer(uow: UnitOfWork, customer_id: UUID | None) -> Customer | None
 class CreateSale:
     """Registra una venta. Con request_id, repetir la petición no duplica la venta."""
 
-    def __init__(self, uow: UnitOfWorkFactory, clock: Clock, outbox: InvoiceOutbox | None = None) -> None:
+    def __init__(
+        self,
+        uow: UnitOfWorkFactory,
+        clock: Clock,
+        outbox: InvoiceOutbox | None = None,
+        modules: ModuleSet | None = None,
+    ) -> None:
         self._uow = uow
         self._clock = clock
         self._outbox = outbox or DisabledInvoiceOutbox()
+        self._credit_available = (modules or ModuleSet.all()).is_enabled(Module.CREDIT)
 
     def execute(self, actor: Actor, command: CreateSaleCommand) -> Sale:
         actor.require(Permission.SELL)
@@ -137,7 +145,10 @@ class CreateSale:
                 cash_session_id=session.id,
                 customer_id=customer.id if customer else None,
                 lines=lines,
-                payments=[_resolve_payment(settings, payment) for payment in command.payments],
+                payments=[
+                    _resolve_payment(settings, payment, credit_available=self._credit_available)
+                    for payment in command.payments
+                ],
                 at=now,
                 note=command.note,
                 request_id=request_id,

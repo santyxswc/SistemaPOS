@@ -81,7 +81,7 @@ class SalesReportQueriesTests(PosTestCase):
         conn = connect(self.c.config.database_path)
         conn.executescript(
             # Deja la base como estaba en la versión 2 (deshace también las migraciones posteriores).
-            "DROP TABLE electronic_documents; "
+            "DROP TABLE business_logo; DROP TABLE electronic_documents; "
             "DROP TABLE supplier_ledger; DROP TABLE purchase_lines; DROP TABLE purchases; DROP TABLE suppliers; "
             "DROP INDEX ix_sale_lines_product; ALTER TABLE sale_payments DROP COLUMN applied_amount; "
             "PRAGMA user_version = 2;"

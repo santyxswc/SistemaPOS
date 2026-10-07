@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
+from ..domain.branding import Logo
 from ..domain.cash import CashSession
 from ..domain.catalog import Category, Product
 from ..domain.customers import Customer, LedgerEntry
@@ -70,6 +71,14 @@ class LoginThrottle(Protocol):
 
 class EventPublisher(Protocol):
     def publish(self, events: Sequence[DomainEvent]) -> None: ...
+
+
+class UserQuota(Protocol):
+    """Cuántos usuarios activos admite la instalación. Sin el módulo de licencias no hay límite."""
+
+    def ensure_can_activate(self, uow: UnitOfWork) -> None:
+        """Lanza BusinessRuleViolation si activar un usuario más excede lo permitido."""
+        ...
 
 
 class LicenseVerifier(Protocol):
@@ -176,6 +185,16 @@ class LicenseRepository(Protocol):
     def get_installed_at(self) -> datetime | None: ...
 
     def save_installed_at(self, at: datetime) -> None: ...
+
+
+class LogoRepository(Protocol):
+    """El logo del negocio (uno solo). Vive en la base de datos para que viaje con los respaldos."""
+
+    def get(self) -> Logo | None: ...
+
+    def save(self, logo: Logo) -> None: ...
+
+    def delete(self) -> None: ...
 
 
 class RolePermissionsRepository(Protocol):
@@ -465,6 +484,7 @@ class UnitOfWork(ABC):
 
     settings: SettingsRepository
     licensing: LicenseRepository
+    logo: LogoRepository
     roles: RolePermissionsRepository
     sequences: SequenceRepository
     users: UserRepository

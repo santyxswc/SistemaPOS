@@ -19,10 +19,17 @@ from ...domain.users import (
 )
 from ..actor import Actor
 from ..common import get_or_404, require_settings
-from ..ports import Clock, LoginThrottle, PasswordHasher, TokenService, UnitOfWorkFactory
-from .licensing import LicensePolicy
+from ..modules import Module, ModuleSet
+from ..ports import Clock, LoginThrottle, PasswordHasher, TokenService, UnitOfWork, UnitOfWorkFactory, UserQuota
 
 _INVALID_CREDENTIALS = "Usuario o contraseña incorrectos"
+
+
+class NoUserLimit:
+    """Objeto nulo de `UserQuota`: sin el módulo de licencias, el negocio crea los usuarios que quiera."""
+
+    def ensure_can_activate(self, uow: UnitOfWork) -> None:
+        return None
 
 
 @dataclass(frozen=True)
@@ -65,20 +72,26 @@ class Login:
 
 
 class ResolveActor:
-    """Convierte un token en el usuario actual, verificando que siga activo."""
+    """Convierte un token en el usuario actual, verificando que siga activo.
 
-    def __init__(self, uow: UnitOfWorkFactory, tokens: TokenService) -> None:
+    Sus permisos son los de su rol menos los de los módulos apagados: así ningún caso
+    de uso de un módulo apagado se puede ejecutar, aunque alguien llame a la API a mano.
+    """
+
+    def __init__(self, uow: UnitOfWorkFactory, tokens: TokenService, modules: ModuleSet) -> None:
         self._uow = uow
         self._tokens = tokens
+        self._modules = modules
 
     def execute(self, token: str) -> Actor:
         user_id = self._tokens.decode(token)
         with self._uow(read_only=True) as uow:
             user = uow.users.get(user_id)
-            policy = uow.roles.get()
+            # Sin el módulo de permisos por rol rigen los de fábrica, aunque se hayan personalizado antes.
+            policy = uow.roles.get() if self._modules.is_enabled(Module.ROLE_PERMISSIONS) else RolePermissions()
         if user is None or not user.active:
             raise AuthenticationError("Sesión no válida: inicie sesión de nuevo")
-        return Actor.from_user(user, policy)
+        return Actor.from_user(user, policy).limited_to(self._modules.available_permissions)
 
 
 class BootstrapAdmin:
@@ -117,12 +130,12 @@ class CreateUserCommand:
 
 class CreateUser:
     def __init__(
-        self, uow: UnitOfWorkFactory, hasher: PasswordHasher, clock: Clock, license_policy: LicensePolicy
+        self, uow: UnitOfWorkFactory, hasher: PasswordHasher, clock: Clock, quota: UserQuota
     ) -> None:
         self._uow = uow
         self._hasher = hasher
         self._clock = clock
-        self._license = license_policy
+        self._quota = quota
 
     def execute(self, actor: Actor, command: CreateUserCommand) -> User:
         actor.require(Permission.MANAGE_USERS)
@@ -138,7 +151,7 @@ class CreateUser:
             )
             if uow.users.get_by_username(user.username) is not None:
                 raise ConflictError(f"El usuario «{user.username}» ya existe")
-            self._license.ensure_user_quota(uow)
+            self._quota.ensure_can_activate(uow)
             uow.users.add(user)
             uow.commit()
         return user
@@ -153,10 +166,10 @@ class UpdateUserCommand:
 
 
 class UpdateUser:
-    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, license_policy: LicensePolicy) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, quota: UserQuota) -> None:
         self._uow = uow
         self._hasher = hasher
-        self._license = license_policy
+        self._quota = quota
 
     def execute(self, actor: Actor, user_id: UUID, command: UpdateUserCommand) -> User:
         actor.require(Permission.MANAGE_USERS)
@@ -170,7 +183,7 @@ class UpdateUser:
             if user.id == actor.user_id and (command.active is False or demoting_self):
                 raise BusinessRuleViolation("No puede desactivarse ni quitarse el rol de administrador a sí mismo")
             if command.active and not user.active:
-                self._license.ensure_user_quota(uow)
+                self._quota.ensure_can_activate(uow)
             user.update(
                 full_name=command.full_name,
                 role=command.role,
@@ -209,10 +222,10 @@ class ResetPasswordFromConsole:
     que no hay un permiso adicional que pedir. Reactiva la cuenta si estaba inactiva.
     """
 
-    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, license_policy: LicensePolicy) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, hasher: PasswordHasher, quota: UserQuota) -> None:
         self._uow = uow
         self._hasher = hasher
-        self._license = license_policy
+        self._quota = quota
 
     def execute(self, username: str, new_password: str) -> User:
         validate_password(new_password)
@@ -223,7 +236,7 @@ class ResetPasswordFromConsole:
                 admins = ", ".join(u.username for u in uow.users.list_all() if u.role is Role.ADMIN) or "ninguno"
                 raise NotFoundError(f"No existe el usuario «{username}». Administradores registrados: {admins}")
             if not user.active:
-                self._license.ensure_user_quota(uow)
+                self._quota.ensure_can_activate(uow)
             user.update(password_hash=password_hash, active=True)
             uow.users.save(user)
             uow.commit()
@@ -303,16 +316,26 @@ class GetRolePermissions:
 class UpdateRolePermissions:
     """Cambia lo que puede hacer un rol. Rige desde la siguiente acción de cada usuario."""
 
-    def __init__(self, uow: UnitOfWorkFactory) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, modules: ModuleSet) -> None:
         self._uow = uow
+        self._modules = modules
 
     def execute(self, actor: Actor, role: Role, permissions: set[Permission] | None) -> RolePermissions:
         """Con `permissions=None` el rol vuelve a los permisos de fábrica."""
         actor.require(Permission.MANAGE_USERS)
+        self._modules.require(Module.ROLE_PERMISSIONS)
         if role not in EDITABLE_ROLES:
             raise BusinessRuleViolation(f"Los permisos del rol {ROLE_LABELS[role]} no se pueden cambiar")
         with self._uow() as uow:
-            policy = uow.roles.get().with_role(role, ROLE_PERMISSIONS[role] if permissions is None else permissions)
+            current = uow.roles.get()
+            if permissions is None:
+                granted = ROLE_PERMISSIONS[role]
+            else:
+                # La pantalla solo muestra los permisos de los módulos encendidos; los demás se conservan
+                # como estaban, para que encender de nuevo un módulo no le quite nada a nadie.
+                hidden = frozenset(Permission) - self._modules.available_permissions
+                granted = (frozenset(permissions) - hidden) | (current.for_role(role) & hidden)
+            policy = current.with_role(role, granted)
             uow.roles.save(policy)
             uow.commit()
         return policy

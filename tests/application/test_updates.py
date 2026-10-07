@@ -3,6 +3,7 @@
 import unittest
 
 from pos import __version__
+from pos.application.modules import Module
 from pos.application.ports import ReleaseInfo
 from pos.application.use_cases.updates import CheckForUpdates, UpdateStatus, parse_version
 from pos.config import AppConfig
@@ -47,7 +48,7 @@ class VersionTests(unittest.TestCase):
     def test_config_can_turn_it_off_or_point_elsewhere(self):
         base = {"POS_ENV": "development"}
         self.assertEqual(AppConfig.from_env(base).update_repository, "santyxswc/SistemaPOS")
-        self.assertEqual(AppConfig.from_env({**base, "POS_UPDATE_CHECK": "0"}).update_repository, "")
+        self.assertFalse(AppConfig.from_env({**base, "POS_UPDATE_CHECK": "0"}).modules.is_enabled(Module.UPDATES))
         self.assertEqual(AppConfig.from_env({**base, "POS_UPDATE_REPO": "otro/pos"}).update_repository, "otro/pos")
 
 

@@ -1,7 +1,9 @@
 """Raíz de composición: el único lugar que conoce las piezas concretas y las conecta.
 
 Para un cliente con necesidades distintas se cambia aquí el adaptador (otra base de
-datos, un proveedor de facturación electrónica, notificaciones) y nada más.
+datos, un proveedor de facturación electrónica, notificaciones) y nada más. Los módulos
+apagados (config.modules) reciben aquí su objeto nulo: sin licencias no hay límite de
+usuarios, sin facturación no hay bandeja de salida, sin aviso de versiones no se consulta.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from pathlib import Path
 
 from . import __version__
 from .application.event_handlers import log_low_stock
+from .application.modules import Module, ModuleSet
 from .application.ports import (
     Clock,
     InvoiceProvider,
@@ -18,9 +21,11 @@ from .application.ports import (
     ReceiptPrinter,
     ReleaseSource,
     UnitOfWorkFactory,
+    UserQuota,
 )
 from .application.use_cases import (
     backups,
+    branding,
     cash,
     catalog,
     catalog_import,
@@ -58,6 +63,7 @@ from .infrastructure.security import InMemoryLoginThrottle, JwtTokenService, Pbk
 class Container:
     config: AppConfig
     uow_factory: UnitOfWorkFactory
+    modules: ModuleSet
     # acceso y usuarios
     login: users.Login
     resolve_actor: users.ResolveActor
@@ -74,9 +80,13 @@ class Container:
     # licencia
     get_license_status: licensing.GetLicenseStatus
     install_license: licensing.InstallLicense
-    # configuración
+    # configuración y marca del negocio
     get_settings: settings.GetSettings
     update_settings: settings.UpdateSettings
+    get_branding: branding.GetBranding
+    get_logo: branding.GetLogo
+    update_logo: branding.UpdateLogo
+    remove_logo: branding.RemoveLogo
     # respaldos
     run_backup: backups.RunBackup
     list_backups: backups.ListBackups
@@ -154,9 +164,11 @@ def build_container(
     release_source: ReleaseSource | None = None,
 ) -> Container:
     clock = clock or SystemClock()
+    modules = config.modules
     # La clave pública va dentro del programa a propósito: no se lee de .env ni de la base de datos.
     verifier = license_verifier or Ed25519LicenseVerifier(PUBLIC_KEY)
     license_policy = licensing.LicensePolicy(verifier, clock)
+    user_quota: UserQuota = license_policy if modules.is_enabled(Module.LICENSING) else users.NoUserLimit()
 
     bus = SyncEventBus()
     bus.subscribe(StockLow, log_low_stock)
@@ -167,7 +179,9 @@ def build_container(
         return SqliteUnitOfWork(config.database_path, bus, read_only=read_only)
 
     # Facturación electrónica: con proveedor, cada venta deja su documento en la bandeja de salida.
-    provider = invoice_provider or create_invoice_provider(config.invoice_provider)
+    provider = None
+    if modules.is_enabled(Module.INVOICING):
+        provider = invoice_provider or create_invoice_provider(config.invoice_provider)
     outbox: invoicing.InvoiceOutbox = invoicing.DisabledInvoiceOutbox()
     workers: list[PeriodicWorker] = []
     if provider is not None:
@@ -182,11 +196,13 @@ def build_container(
     bus.subscribe(CashSessionClosed, backups.BackupOnCashClose(run_backup))
 
     printer = receipt_printer or EscPosReceiptPrinter()
-    releases = release_source or (
-        GitHubReleaseSource(config.update_repository, f"PuntoDeVenta/{__version__}")
-        if config.update_repository
-        else NoReleaseSource()
-    )
+    releases: ReleaseSource = NoReleaseSource()
+    if modules.is_enabled(Module.UPDATES):
+        releases = release_source or (
+            GitHubReleaseSource(config.update_repository, f"PuntoDeVenta/{__version__}")
+            if config.update_repository
+            else NoReleaseSource()
+        )
     sales_summary = reports.GetSalesSummary(uow)
     hasher = Pbkdf2PasswordHasher(config.password_iterations)
     tokens = JwtTokenService(config.secret_key, config.token_ttl_minutes, clock)
@@ -195,22 +211,27 @@ def build_container(
     return Container(
         config=config,
         uow_factory=uow,
+        modules=modules,
         login=users.Login(uow, hasher, tokens, InMemoryLoginThrottle(clock)),
-        resolve_actor=users.ResolveActor(uow, tokens),
+        resolve_actor=users.ResolveActor(uow, tokens, modules),
         bootstrap_admin=users.BootstrapAdmin(uow, hasher, clock),
         get_setup_status=users.GetSetupStatus(uow),
         complete_initial_setup=users.CompleteInitialSetup(uow, hasher, clock),
-        create_user=users.CreateUser(uow, hasher, clock, license_policy),
-        update_user=users.UpdateUser(uow, hasher, license_policy),
+        create_user=users.CreateUser(uow, hasher, clock, user_quota),
+        update_user=users.UpdateUser(uow, hasher, user_quota),
         change_own_password=users.ChangeOwnPassword(uow, hasher),
-        reset_password_from_console=users.ResetPasswordFromConsole(uow, hasher, license_policy),
+        reset_password_from_console=users.ResetPasswordFromConsole(uow, hasher, user_quota),
         list_users=users.ListUsers(uow),
         get_role_permissions=users.GetRolePermissions(uow),
-        update_role_permissions=users.UpdateRolePermissions(uow),
+        update_role_permissions=users.UpdateRolePermissions(uow, modules),
         get_license_status=licensing.GetLicenseStatus(uow, license_policy),
         install_license=licensing.InstallLicense(uow, verifier, license_policy, clock),
         get_settings=settings.GetSettings(uow),
         update_settings=settings.UpdateSettings(uow, backup_service),
+        get_branding=branding.GetBranding(uow),
+        get_logo=branding.GetLogo(uow),
+        update_logo=branding.UpdateLogo(uow, clock),
+        remove_logo=branding.RemoveLogo(uow),
         run_backup=run_backup,
         list_backups=backups.ListBackups(backup_service),
         create_category=catalog.CreateCategory(uow),
@@ -232,7 +253,7 @@ def build_container(
         close_cash_session=cash.CloseCashSession(uow, clock),
         get_cash_session_report=cash.GetCashSessionReport(uow),
         list_cash_sessions=cash.ListCashSessions(uow),
-        create_sale=sales.CreateSale(uow, clock, outbox),
+        create_sale=sales.CreateSale(uow, clock, outbox, modules),
         void_sale=sales.VoidSale(uow, clock, outbox),
         get_sale=sales.GetSale(uow),
         list_sales=sales.ListSales(uow),

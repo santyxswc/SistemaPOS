@@ -56,15 +56,6 @@ def get_sale(sale_id: UUID):
     return presenters.sale(container().get_sale.execute(current_actor(), sale_id))
 
 
-@bp.post("/sales/<uuid:sale_id>/print")
-@authenticated
-def print_sale(sale_id: UUID):
-    """Impresión directa en la impresora térmica. {"copy": true} para reimprimir."""
-    body = Body.from_request()
-    container().print_sale_receipt.execute(current_actor(), sale_id, copy=body.boolean("copy", default=False))
-    return "", 204
-
-
 @bp.post("/sales/<uuid:sale_id>/void")
 @authenticated
 def void_sale(sale_id: UUID):

@@ -13,6 +13,7 @@ from uuid import UUID
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from pos.application.actor import Actor
+from pos.application.modules import ModuleSet
 from pos.application.use_cases.catalog import CreateProductCommand
 from pos.application.use_cases.sales import CreateSaleCommand, PaymentInput, SaleItemInput
 from pos.application.use_cases.users import CreateUserCommand
@@ -56,6 +57,8 @@ class PosTestCase(unittest.TestCase):
     """Cada prueba usa una base de datos nueva y el contenedor real de la aplicación."""
 
     use_real_clock = False
+    # Las pruebas existentes cubren todas las funciones; las de módulos apagan los que necesiten.
+    modules = ModuleSet.all()
 
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
@@ -66,6 +69,7 @@ class PosTestCase(unittest.TestCase):
             secret_key="s" * 48,
             password_iterations=1_000,  # rápido en pruebas; en producción 600.000
             business_name="Tienda de prueba",
+            modules=self.modules,
         )
         self.c = build_container(
             config,

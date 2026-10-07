@@ -298,6 +298,15 @@ MIGRATIONS: list[Migration] = [
     CREATE INDEX ix_electronic_documents_due ON electronic_documents(next_attempt_at) WHERE status = 'pending';
     CREATE INDEX ix_electronic_documents_status ON electronic_documents(status, created_at);
     """,
+    # 6: logo del negocio (una sola fila), dentro de la base de datos para que viaje con los respaldos
+    """
+    CREATE TABLE business_logo (
+        id           INTEGER PRIMARY KEY CHECK (id = 1),
+        content_type TEXT NOT NULL,
+        data         BLOB NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+    """,
 ]
 
 

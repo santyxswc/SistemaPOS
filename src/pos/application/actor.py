@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID
 
 from ..domain.shared.errors import PermissionDenied
@@ -26,6 +26,10 @@ class Actor:
             role=user.role,
             permissions=user.permissions(policy),
         )
+
+    def limited_to(self, available: frozenset[Permission]) -> Actor:
+        """El mismo usuario sin los permisos de los módulos apagados en esta instalación."""
+        return replace(self, permissions=self.permissions & available)
 
     def can(self, permission: Permission) -> bool:
         return permission in self.permissions

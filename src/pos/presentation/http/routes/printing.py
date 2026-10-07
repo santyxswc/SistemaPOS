@@ -1,4 +1,8 @@
+"""Impresión directa en la impresora térmica y apertura del cajón (módulo «impresion»)."""
+
 from __future__ import annotations
+
+from uuid import UUID
 
 from flask import Blueprint
 
@@ -7,6 +11,15 @@ from ..request import Body
 from .settings import read_printer_config
 
 bp = Blueprint("printing", __name__)
+
+
+@bp.post("/sales/<uuid:sale_id>/print")
+@authenticated
+def print_sale(sale_id: UUID):
+    """{"copy": true} para reimprimir."""
+    body = Body.from_request()
+    container().print_sale_receipt.execute(current_actor(), sale_id, copy=body.boolean("copy", default=False))
+    return "", 204
 
 
 @bp.get("/printing/printers")

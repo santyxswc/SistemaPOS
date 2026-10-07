@@ -40,7 +40,7 @@ class ModuleSetTests(unittest.TestCase):
         config = AppConfig.from_env({**base, "POS_MODULES_DISABLED": "reportes", "POS_MODULES_ENABLED": "licencias"})
         self.assertFalse(config.modules.is_enabled(Module.REPORTS))
         self.assertTrue(config.modules.is_enabled(Module.LICENSING))
-        with self.assertRaisesRegex(RuntimeError, "POS_MODULES"):
+        with self.assertRaisesRegex(ValidationError, "POS_MODULES"):
             AppConfig.from_env({**base, "POS_MODULES_DISABLED": "inventarios"})
 
     def test_env_file_keeps_comments_when_changing_values(self):

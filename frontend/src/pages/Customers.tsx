@@ -14,7 +14,8 @@ const ENTRY_LABEL: Record<LedgerEntry["type"], string> = {
 };
 
 export function CustomersPage() {
-  const { can } = useSession();
+  const { can, has } = useSession();
+  const credit = has("fiado");
   const [text, setText] = useState("");
   const [onlyDebtors, setOnlyDebtors] = useState(false);
   const [editing, setEditing] = useState<Customer | null | "new">(null);
@@ -42,12 +43,16 @@ export function CustomersPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <label className="check" style={{ margin: 0 }}>
-          <input type="checkbox" checked={onlyDebtors} onChange={(e) => setOnlyDebtors(e.target.checked)} /> Solo con
-          deuda
-        </label>
-        <span className="spacer" />
-        <span className="muted">Por cobrar en esta lista: {formatMoney(totalDebt)}</span>
+        {credit && (
+          <>
+            <label className="check" style={{ margin: 0 }}>
+              <input type="checkbox" checked={onlyDebtors} onChange={(e) => setOnlyDebtors(e.target.checked)} /> Solo
+              con deuda
+            </label>
+            <span className="spacer" />
+            <span className="muted">Por cobrar en esta lista: {formatMoney(totalDebt)}</span>
+          </>
+        )}
       </div>
       <ErrorAlert error={customers.error} />
       <section className="card table-wrap">
@@ -59,8 +64,8 @@ export function CustomersPage() {
               <tr>
                 <th>Cliente</th>
                 <th>Teléfono</th>
-                <th className="num">Debe</th>
-                <th className="num">Cupo disponible</th>
+                {credit && <th className="num">Debe</th>}
+                {credit && <th className="num">Cupo disponible</th>}
                 <th />
               </tr>
             </thead>
@@ -72,14 +77,16 @@ export function CustomersPage() {
                     <div className="muted small">{customer.document}</div>
                   </td>
                   <td>{customer.phone}</td>
-                  <td className="num">
-                    {toCents(customer.balance) > 0 ? (
-                      <span className="badge badge-warn">{formatMoney(customer.balance)}</span>
-                    ) : (
-                      formatMoney(customer.balance)
-                    )}
-                  </td>
-                  <td className="num">{formatMoney(customer.available_credit)}</td>
+                  {credit && (
+                    <td className="num">
+                      {toCents(customer.balance) > 0 ? (
+                        <span className="badge badge-warn">{formatMoney(customer.balance)}</span>
+                      ) : (
+                        formatMoney(customer.balance)
+                      )}
+                    </td>
+                  )}
+                  {credit && <td className="num">{formatMoney(customer.available_credit)}</td>}
                   <td className="right">
                     <div className="row" style={{ justifyContent: "flex-end" }}>
                       {can("collect_payments") && (

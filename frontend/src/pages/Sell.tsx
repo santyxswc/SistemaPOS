@@ -445,9 +445,9 @@ function Checkout(props: {
   onClose: () => void;
   onDone: (sale: Sale, customer: Customer | null) => void;
 }) {
-  const { settings } = useSession();
+  const { settings, has } = useSession();
   const methods = settings.payment_methods.filter(
-    (method) => method.active && (method.kind !== "credit" || settings.credit_sales_enabled),
+    (method) => method.active && (method.kind !== "credit" || (has("fiado") && settings.credit_sales_enabled)),
   );
   const firstCash = methods.find((method) => method.kind === "cash") ?? methods[0];
   const [payments, setPayments] = useState<{ method: string; text: string }[]>([

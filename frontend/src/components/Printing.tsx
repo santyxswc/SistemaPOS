@@ -20,8 +20,8 @@ const WIDTH_LABEL: Record<number, string> = {
 
 /** Imprime tiquetes por la impresora directa si hay una; si no, con el diálogo del navegador. */
 export function usePrinting() {
-  const { settings } = useSession();
-  const direct = settings.printer.kind !== "browser";
+  const { settings, has } = useSession();
+  const direct = has("impresion") && settings.printer.kind !== "browser";
   const { busy, error, run } = useAction();
 
   const printSale = useCallback(

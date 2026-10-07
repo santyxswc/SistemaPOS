@@ -135,7 +135,9 @@ def modules_from_env(env: Mapping[str, str]) -> ModuleSet:
         disable = parse_module_names(env.get("POS_MODULES_DISABLED", ""))
         enable = parse_module_names(env.get("POS_MODULES_ENABLED", ""))
     except ValidationError as error:
-        raise RuntimeError(f"Revise POS_MODULES_DISABLED / POS_MODULES_ENABLED en el .env: {error.message}") from None
+        # Error de dominio: al abrir el programa sin consola, el mensaje se muestra tal cual en una ventana.
+        message = f"Revise POS_MODULES_DISABLED / POS_MODULES_ENABLED en el .env: {error.message}"
+        raise ValidationError(message) from None
     if env.get("POS_UPDATE_CHECK", "1").strip().lower() in ("0", "false", "no"):  # nombre anterior, se respeta
         disable.add(Module.UPDATES)
     modules = ModuleSet.configure(disable=disable, enable=enable)

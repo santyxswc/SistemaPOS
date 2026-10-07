@@ -8,7 +8,7 @@ import { useSession } from "../session";
 import { type Items, type LicenseStatus, ROLE_LABEL, type Role, type User } from "../types";
 
 export function UsersPage() {
-  const { me } = useSession();
+  const { me, has } = useSession();
   const users = useLoad(() => api.get<Items<User>>("/users"), []);
   const license = useLoad(() => api.get<LicenseStatus>("/license"), []);
   const maxUsers = license.data?.max_users ?? null;
@@ -66,7 +66,7 @@ export function UsersPage() {
           </table>
         )}
       </section>
-      <RolePermissionsCard />
+      {has("permisos") && <RolePermissionsCard />}
       {editing && (
         <UserForm
           user={editing === "new" ? null : editing}

@@ -113,10 +113,11 @@ export const api = {
     request<T>("POST", path, { body: body ?? {}, headers }),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, { body }),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, { body }),
-  upload: <T>(path: string, file: File, query?: Query) => {
+  delete: <T>(path: string) => request<T>("DELETE", path),
+  upload: <T>(path: string, file: File, query?: Query, method: "POST" | "PUT" = "POST") => {
     const form = new FormData();
     form.append("file", file);
-    return request<T>("POST", path, { body: form, query });
+    return request<T>(method, path, { body: form, query });
   },
   download,
 };

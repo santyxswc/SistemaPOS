@@ -30,7 +30,7 @@ type Dialog =
   | { kind: "purchase" | "adjust" | "history"; product: Product };
 
 export function ProductsPage() {
-  const { can } = useSession();
+  const { can, has } = useSession();
   const exporting = useAction();
   const [text, setText] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
@@ -58,16 +58,20 @@ export function ProductsPage() {
         <h1>Productos</h1>
         {can("manage_catalog") && (
           <div className="row">
-            <button
-              className="btn"
-              disabled={exporting.busy}
-              onClick={() => exporting.run(() => api.download("/products/export", { include_inactive: showInactive }, "productos.xlsx"))}
-            >
-              Exportar a Excel
-            </button>
-            <button className="btn" onClick={() => setDialog({ kind: "import" })}>
-              Importar
-            </button>
+            {has("excel") && (
+              <>
+                <button
+                  className="btn"
+                  disabled={exporting.busy}
+                  onClick={() => exporting.run(() => api.download("/products/export", { include_inactive: showInactive }, "productos.xlsx"))}
+                >
+                  Exportar a Excel
+                </button>
+                <button className="btn" onClick={() => setDialog({ kind: "import" })}>
+                  Importar
+                </button>
+              </>
+            )}
             <button className="btn" onClick={() => setDialog({ kind: "category" })}>
               Nueva categoría
             </button>

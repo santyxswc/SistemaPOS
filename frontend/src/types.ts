@@ -18,6 +18,32 @@ export type Permission =
 
 export type Role = "admin" | "supervisor" | "cashier";
 
+/** Módulos que el técnico enciende o apaga por cliente (src/pos/application/modules.py). */
+export type ModuleId =
+  | "clientes"
+  | "fiado"
+  | "proveedores"
+  | "reportes"
+  | "descuentos"
+  | "permisos"
+  | "excel"
+  | "impresion"
+  | "facturacion"
+  | "actualizaciones"
+  | "licencias";
+
+export interface ModuleInfo {
+  id: ModuleId;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface Branding {
+  business_name: string;
+  logo_version: string | null;
+}
+
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Administrador",
   supervisor: "Supervisor",

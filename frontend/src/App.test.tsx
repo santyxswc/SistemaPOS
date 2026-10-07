@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { clearCarts } from "./cartStore";
-import type { Me, Product, Settings } from "./types";
+import type { Me, ModuleId, Product, Settings } from "./types";
 
 const SETTINGS: Settings = {
   business_name: "Tienda Doña Rosa",
@@ -49,7 +49,30 @@ interface Call {
 
 type Handler = (call: Call) => { status?: number; body?: unknown } | "network-error";
 
-function mockServer(handler: Handler) {
+const ALL_MODULES: ModuleId[] = [
+  "clientes", "fiado", "proveedores", "reportes", "descuentos", "permisos", "excel", "impresion", "facturacion",
+  "actualizaciones", "licencias",
+];
+
+interface ServerOptions {
+  modules?: ModuleId[]; // de fábrica, todos
+  logoVersion?: () => string | null;
+}
+
+/** Lo que responde cualquier servidor: la marca del negocio y sus módulos. */
+function commonRoutes(
+  call: Call,
+  { modules = ALL_MODULES, logoVersion = () => null }: ServerOptions,
+): { status?: number; body?: unknown } | null {
+  const route = `${call.method} ${call.path.split("?")[0]}`;
+  if (route === "GET /branding") return { body: { business_name: SETTINGS.business_name, logo_version: logoVersion() } };
+  if (route === "GET /modules") {
+    return { body: { items: ALL_MODULES.map((id) => ({ id, name: id, description: "", enabled: modules.includes(id) })) } };
+  }
+  return null;
+}
+
+function mockServer(handler: Handler, options: ServerOptions = {}) {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
@@ -62,7 +85,7 @@ function mockServer(handler: Handler) {
         headers: (init.headers ?? {}) as Record<string, string>,
       };
       calls.push(call);
-      const result = handler(call);
+      const result = commonRoutes(call, options) ?? handler(call);
       if (result === "network-error") throw new TypeError("Failed to fetch");
       const status = result.status ?? 200;
       return new Response(status === 204 ? null : JSON.stringify(result.body ?? {}), { status });
@@ -548,5 +571,67 @@ describe("versión nueva", () => {
     await user.click(within(banner).getByRole("button", { name: "Ahora no" }));
     expect(screen.queryByText(/Hay una versión nueva/)).toBeNull();
     expect(localStorage.getItem("pos.update-dismissed")).toBe("0.4.0");
+  });
+});
+
+describe("módulos por cliente", () => {
+  const OWNER: Me = {
+    id: "u-0", username: "dueno", full_name: "Ana Ruiz", role: "admin",
+    permissions: ["manage_settings", "manage_users", "manage_catalog", "sell", "operate_cash", "view_reports"],
+  };
+
+  function ownerServer(extra: Handler = () => ({ status: 404, body: { error: { code: "not_found", message: "no simulado" } } })): Handler {
+    return (call) => {
+      const route = `${call.method} ${call.path.split("?")[0]}`;
+      if (route === "GET /auth/me") return { body: OWNER };
+      if (route === "GET /settings") return { body: SETTINGS };
+      if (route === "GET /backups") return { body: { items: [] } };
+      if (route === "GET /users") return { body: { items: [] } };
+      return extra(call);
+    };
+  }
+
+  it("sin proveedores, reportes, impresión ni fiado: no aparecen sus pestañas ni sus ajustes", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    window.location.hash = "#/ajustes";
+    mockServer(ownerServer(), { modules: ["clientes", "permisos", "excel"] });
+    render(<App />);
+
+    const menu = await screen.findByRole("navigation", { name: "Menú principal" });
+    const labels = within(menu).getAllByRole("link").map((link) => link.textContent ?? "");
+    expect(labels.some((label) => label.includes("Clientes"))).toBe(true);
+    expect(labels.some((label) => label.includes("Proveedores") || label.includes("Reportes"))).toBe(false);
+
+    await screen.findByRole("region", { name: "Logo del negocio" });
+    expect(screen.queryByRole("region", { name: "Impresora de tiquetes" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Licencia" })).toBeNull();
+    expect(screen.queryByText("Permitir ventas fiadas")).toBeNull();
+    expect(screen.queryByDisplayValue("Fiado")).toBeNull(); // el método de pago fiado se oculta
+  });
+
+  it("el dueño sube el logo y aparece en el menú", async () => {
+    localStorage.setItem("pos.token", "token-admin");
+    window.location.hash = "#/ajustes";
+    let version: string | null = null;
+    const calls = mockServer(
+      ownerServer((call) => {
+        if (call.method !== "PUT" || call.path !== "/branding/logo") return { status: 404, body: {} };
+        version = "1760000000";
+        return { body: { logo_version: version } };
+      }),
+      { logoVersion: () => version },
+    );
+    const user = userEvent.setup();
+    render(<App />);
+
+    const card = await screen.findByRole("region", { name: "Logo del negocio" });
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "logo.png", { type: "image/png" });
+    await user.upload(within(card).getByLabelText("Archivo del logo"), file);
+
+    expect(await within(card).findByRole("img", { name: "Logo de Tienda Doña Rosa" })).toBeTruthy();
+    const upload = calls.find((c) => c.method === "PUT" && c.path === "/branding/logo");
+    expect(upload?.body).toBeInstanceOf(FormData);
+    const menu = screen.getByRole("navigation", { name: "Menú principal" });
+    expect(menu.querySelector("img.brand-logo")?.getAttribute("src")).toBe("/api/v1/branding/logo?v=1760000000");
   });
 });

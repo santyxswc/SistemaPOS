@@ -1,14 +1,26 @@
-// Ajustes del negocio: datos del tiquete, impuestos, reglas de venta y métodos de pago.
+// Ajustes del negocio: datos del tiquete, impuestos, reglas de venta y métodos de pago,
+// más una tarjeta por cada función (logo, impresora, respaldos...). Las tarjetas de los
+// módulos que el negocio no tiene no aparecen.
 
-import { type FormEvent, useState } from "react";
+import { type ComponentType, type FormEvent, useState } from "react";
 import { api } from "../api";
 import { BackupsCard } from "../components/Backups";
+import { LogoCard } from "../components/Branding";
 import { InvoicingCard } from "../components/Invoicing";
 import { LicenseCard } from "../components/License";
 import { PrinterCard } from "../components/Printing";
 import { ErrorAlert, Field, toast, useAction } from "../components/ui";
 import { useSession } from "../session";
-import type { PaymentKind, PaymentMethod, Settings } from "../types";
+import type { ModuleId, PaymentKind, PaymentMethod, Settings } from "../types";
+
+// Para agregar una sección a Ajustes basta con una entrada aquí.
+const SECTIONS: { module?: ModuleId; card: ComponentType }[] = [
+  { card: LogoCard },
+  { module: "impresion", card: PrinterCard },
+  { card: BackupsCard },
+  { module: "facturacion", card: InvoicingCard },
+  { module: "licencias", card: LicenseCard },
+];
 
 const KIND_LABEL: Record<PaymentKind, string> = {
   cash: "Efectivo (entra al cajón y da vueltas)",
@@ -17,7 +29,9 @@ const KIND_LABEL: Record<PaymentKind, string> = {
 };
 
 export function SettingsPage() {
-  const { settings, reloadSettings } = useSession();
+  const { settings, reloadSettings, has } = useSession();
+  // Sin el módulo de fiado no se ofrece el tipo de pago "Fiado" (los métodos ya guardados se conservan).
+  const kinds = Object.entries(KIND_LABEL).filter(([kind]) => kind !== "credit" || has("fiado"));
   const [form, setForm] = useState<Settings>(settings);
   const { busy, error, run } = useAction();
   const set = (change: Partial<Settings>) => setForm((current) => ({ ...current, ...change }));
@@ -89,10 +103,12 @@ export function SettingsPage() {
               <input type="checkbox" checked={form.prices_include_tax} onChange={(e) => set({ prices_include_tax: e.target.checked })} />
               Los precios ya incluyen el impuesto (lo normal en tiendas)
             </label>
-            <label className="check">
-              <input type="checkbox" checked={form.credit_sales_enabled} onChange={(e) => set({ credit_sales_enabled: e.target.checked })} />
-              Permitir ventas fiadas
-            </label>
+            {has("fiado") && (
+              <label className="check">
+                <input type="checkbox" checked={form.credit_sales_enabled} onChange={(e) => set({ credit_sales_enabled: e.target.checked })} />
+                Permitir ventas fiadas
+              </label>
+            )}
             <label className="check">
               <input type="checkbox" checked={form.allow_negative_stock} onChange={(e) => set({ allow_negative_stock: e.target.checked })} />
               Vender aunque el sistema marque cero existencias
@@ -113,35 +129,37 @@ export function SettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {form.payment_methods.map((method, index) => (
-                  <tr key={index}>
-                    <td>
-                      <input className="input" value={method.name} onChange={(e) => setMethod(index, { name: e.target.value })} required />
-                    </td>
-                    <td>
-                      <input
-                        className="input"
-                        value={method.code}
-                        onChange={(e) => setMethod(index, { code: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
-                        required
-                        disabled={settings.payment_methods.some((saved) => saved.code === method.code)}
-                        title="El código no cambia después de guardado: así los reportes antiguos siguen cuadrando"
-                      />
-                    </td>
-                    <td>
-                      <select className="input" value={method.kind} onChange={(e) => setMethod(index, { kind: e.target.value as PaymentKind })}>
-                        {Object.entries(KIND_LABEL).map(([kind, label]) => (
-                          <option key={kind} value={kind}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input type="checkbox" checked={method.active} onChange={(e) => setMethod(index, { active: e.target.checked })} aria-label={`Activar ${method.name}`} />
-                    </td>
-                  </tr>
-                ))}
+                {form.payment_methods.map((method, index) =>
+                  method.kind === "credit" && !has("fiado") ? null : (
+                    <tr key={index}>
+                      <td>
+                        <input className="input" value={method.name} onChange={(e) => setMethod(index, { name: e.target.value })} required />
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          value={method.code}
+                          onChange={(e) => setMethod(index, { code: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
+                          required
+                          disabled={settings.payment_methods.some((saved) => saved.code === method.code)}
+                          title="El código no cambia después de guardado: así los reportes antiguos siguen cuadrando"
+                        />
+                      </td>
+                      <td>
+                        <select className="input" value={method.kind} onChange={(e) => setMethod(index, { kind: e.target.value as PaymentKind })}>
+                          {kinds.map(([kind, label]) => (
+                            <option key={kind} value={kind}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input type="checkbox" checked={method.active} onChange={(e) => setMethod(index, { active: e.target.checked })} aria-label={`Activar ${method.name}`} />
+                      </td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </div>
@@ -155,10 +173,9 @@ export function SettingsPage() {
           </button>
         </section>
       </form>
-      <PrinterCard />
-      <BackupsCard />
-      <InvoicingCard />
-      <LicenseCard />
+      {SECTIONS.filter((section) => !section.module || has(section.module)).map(({ card: Card }, index) => (
+        <Card key={index} />
+      ))}
     </>
   );
 }

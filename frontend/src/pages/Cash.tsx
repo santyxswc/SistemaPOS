@@ -27,7 +27,7 @@ async function loadCurrent(): Promise<CashReport | null> {
 }
 
 export function CashPage() {
-  const { can, settings } = useSession();
+  const { can, has, settings } = useSession();
   const current = useLoad(loadCurrent, []);
   const [movement, setMovement] = useState<"deposit" | "withdrawal" | null>(null);
   const [closing, setClosing] = useState(false);
@@ -45,7 +45,7 @@ export function CashPage() {
         <h1>Caja</h1>
         {current.data && (
           <div className="row">
-            {settings.printer.kind !== "browser" && (
+            {has("impresion") && settings.printer.kind !== "browser" && (
               <button className="btn" disabled={drawer.busy} onClick={openDrawer}>
                 Abrir cajón
               </button>

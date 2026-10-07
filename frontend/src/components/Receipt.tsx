@@ -1,13 +1,17 @@
 // Tiquete para impresora térmica de 80 mm (se imprime con el diálogo del navegador).
 
 import { formatMoney, formatQuantity } from "../money";
+import { useSession } from "../session";
 import type { Sale, Settings } from "../types";
+import { logoUrl } from "./Branding";
 import { formatDateTime } from "./ui";
 
 export function Receipt({ sale, settings, customerName }: { sale: Sale; settings: Settings; customerName?: string }) {
+  const { branding } = useSession();
   return (
     <div className="receipt">
       <div className="center">
+        {branding.logo_version && <img className="receipt-logo" src={logoUrl(branding.logo_version)} alt="" />}
         <strong>{settings.business_name}</strong>
         {settings.tax_id && <div>NIT {settings.tax_id}</div>}
         {settings.address && <div>{settings.address}</div>}

@@ -1,11 +1,21 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../api";
+import { BrandMark } from "../components/Branding";
 import { ErrorAlert, Field, useAction } from "../components/ui";
+import type { Branding } from "../types";
 
 export function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const { busy, error, run } = useAction();
+  const [branding, setBranding] = useState<Branding | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Branding>("/branding")
+      .then(setBranding)
+      .catch(() => setBranding(null)); // sin marca se ve el título genérico
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -16,7 +26,7 @@ export function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
   return (
     <div className="login">
       <form className="card" onSubmit={submit}>
-        <h1>Punto de venta</h1>
+        {branding ? <BrandMark branding={branding} className="login-brand" /> : <h1>Punto de venta</h1>}
         <p className="muted">Ingrese con su usuario y contraseña.</p>
         <ErrorAlert error={error} />
         <Field label="Usuario">

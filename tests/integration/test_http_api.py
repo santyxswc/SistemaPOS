@@ -65,6 +65,11 @@ class HttpApiTests(ApiTestCase):
 
         current = self.api("GET", "/api/v1/cash-sessions/current").get_json()
         self.assertEqual(current["session"]["expected_cash"], "56000.00")
+        self.assertEqual(current["units_sold"], "2")
+        self.assertEqual(
+            [(p["description"], p["quantity"], p["total"]) for p in current["products"]],
+            [("Gaseosa 400 ml", "2", "6000.00")],
+        )
 
         closed = self.api("POST", "/api/v1/cash-sessions/current/close", json={"counted_amount": "56000"})
         self.assertEqual(closed.get_json()["session"]["difference"], "0.00")

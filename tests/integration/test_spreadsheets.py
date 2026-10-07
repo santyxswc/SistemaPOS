@@ -4,10 +4,13 @@ import io
 import unittest
 import zipfile
 from decimal import Decimal
+from pathlib import Path
 
 from pos.presentation.spreadsheets import Sheet, read_rows, write_xlsx
 
 from ..support import ApiTestCase
+
+EXAMPLE = Path(__file__).resolve().parents[2] / "docs" / "ejemplos" / "productos-ejemplo.xlsx"
 
 
 class SpreadsheetFormatTests(unittest.TestCase):
@@ -32,6 +35,12 @@ class SpreadsheetApiTests(ApiTestCase):
         url = "/api/v1/products/import?" + "&".join(f"{key}={value}" for key, value in query.items())
         return self.api("POST", url, data={"file": (io.BytesIO(data), filename)},
                         content_type="multipart/form-data")
+
+    def test_the_large_example_imports_cleanly(self):
+        done = self.upload(EXAMPLE.read_bytes(), EXAMPLE.name, dry_run="false").get_json()
+        self.assertEqual((done["errors"], done["created"]), ([], 116))
+        rice = self.api("GET", "/api/v1/products/lookup?code=ARROZ-500").get_json()
+        self.assertEqual((rice["name"], rice["stock"]), ("Arroz Diana 500 g", "40"))
 
     def test_the_template_imports_cleanly(self):
         template = self.api("GET", "/api/v1/products/import-template")

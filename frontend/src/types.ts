@@ -203,6 +203,8 @@ export interface CashReport {
   voided_count: number;
   sales_total: string;
   totals_by_method: PaymentTotal[];
+  units_sold: string;
+  products: ProductSales[];
 }
 
 export interface SaleLine {

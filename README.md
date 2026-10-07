@@ -10,7 +10,7 @@ El cliente **no necesita instalar Python ni nada más**.
 
 1. Ejecute **`PuntoDeVenta-<versión>-setup.exe`**. No pide permisos de administrador; ofrece crear un acceso directo en el escritorio, abrir el sistema al encender el computador y programar el respaldo diario.
 2. Abra **Punto de Venta**. La primera vez, el navegador pide el nombre del negocio y crea la cuenta del administrador.
-3. Cargue los productos desde Excel (**Productos → Importar**; hay una plantilla de ejemplo) y, en **Ajustes**, elija una carpeta de respaldo adicional (USB u OneDrive) y pegue el código de licencia.
+3. Cargue los productos desde Excel (**Productos → Importar**; hay una plantilla de ejemplo, y `docs/ejemplos/productos-ejemplo.xlsx` trae 116 productos de minimercado para probar) y, en **Ajustes**, elija una carpeta de respaldo adicional (USB u OneDrive) y pegue el código de licencia.
 
 El sistema no abre ventanas negras: queda como un **ícono junto al reloj de Windows** con un menú para abrirlo, respaldar ahora, abrir la carpeta de datos o apagarlo. Abrirlo de nuevo cuando ya está abierto solo abre el navegador. Los comandos de soporte (`reset-password`, `license`) se ejecutan con **`PuntoDeVentaConsola.exe`**, que es el mismo programa con consola.
 
@@ -222,8 +222,8 @@ Todos los errores tienen la misma forma, con mensajes listos para mostrar al usu
 ## Pruebas
 
 ```bash
-python -m pytest              # 203 pruebas del backend
-cd frontend && npm test       # 25 pruebas del frontend
+python -m pytest              # 204 pruebas del backend
+cd frontend && npm test       # 26 pruebas del frontend
 ```
 
 Backend: dominio puro, casos de uso sobre SQLite real, la API HTTP de punta a punta, concurrencia (dos cajas vendiendo la última unidad; lecturas que no esperan a quien escribe), migraciones sobre bases existentes, equivalencia de los reportes en SQL contra el cálculo del dominio, idempotencia, freno de login, respaldos (incluida una USB desconectada), licencias (firma alterada, vencimiento, límite de usuarios), importación y exportación de Excel y CSV, compras y cuentas por pagar, permisos por rol, la bandeja de facturación con un proveedor falso (fallas, rechazos, notas crédito), el tiquete en ESC/POS con una impresora de red simulada y el aviso de versiones. Frontend: dinero y carrito, el flujo de venta en un DOM simulado (cobro con vueltas, reintento tras falla de red, validaciones, permisos, impresión directa), la activación de la licencia, la importación de productos, las compras, los permisos por rol, la revisión de documentos electrónicos y el aviso de versión nueva. GitHub Actions corre todo en Windows y Linux en cada cambio.

@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 import { ApiError, api } from "../api";
 import { OpenCash } from "../components/OpenCash";
 import { Empty, ErrorAlert, Field, Modal, Stat, formatDateTime, toast, useAction, useLoad } from "../components/ui";
-import { centsToApi, formatMoney, toCents } from "../money";
+import { centsToApi, formatMoney, formatQuantity, toCents } from "../money";
 import { useSession } from "../session";
 import type { CashReport, CashSession, Items } from "../types";
 
@@ -126,6 +126,7 @@ function SessionDetail({ report }: { report: CashReport }) {
         <Stat label="Base inicial" value={formatMoney(session.opening_amount)} />
         <Stat label="Efectivo esperado en cajón" value={formatMoney(session.expected_cash)} />
         <Stat label="Ventas del turno" value={`${report.sales_count} · ${formatMoney(report.sales_total)}`} />
+        <Stat label="Productos vendidos" value={formatQuantity(report.units_sold)} />
         <Stat label="Anuladas" value={report.voided_count} />
       </div>
       <div className="grid grid-2">
@@ -171,6 +172,35 @@ function SessionDetail({ report }: { report: CashReport }) {
           )}
         </section>
       </div>
+      <section className="card" style={{ marginTop: 16 }}>
+        <h2>Productos vendidos en el turno</h2>
+        {report.products.length === 0 ? (
+          <Empty>Aún no hay ventas en este turno.</Empty>
+        ) : (
+          <div className="table-wrap" style={{ maxHeight: 360, overflowY: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th className="num">Cantidad</th>
+                  <th className="num">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.products.map((product) => (
+                  <tr key={product.product_id}>
+                    <td>
+                      {product.description} <span className="muted small">{product.sku}</span>
+                    </td>
+                    <td className="num">{formatQuantity(product.quantity)}</td>
+                    <td className="num">{formatMoney(product.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </>
   );
 }

@@ -12,6 +12,7 @@ import {
   paymentStatus,
   quickCashAmounts,
 } from "../cart";
+import { useCart } from "../cartStore";
 import { CustomerPicker } from "../components/CustomerPicker";
 import { OpenCash } from "../components/OpenCash";
 import { usePrinting } from "../components/Printing";
@@ -59,8 +60,8 @@ export function SellPage() {
 }
 
 function Register() {
-  const { settings, can } = useSession();
-  const [lines, setLines] = useState<CartLine[]>([]);
+  const { me, settings, can } = useSession();
+  const [lines, setLines] = useCart(me.id);
   const [checkout, setCheckout] = useState(false);
   const [lastSale, setLastSale] = useState<{ sale: Sale; customer: Customer | null; printed: boolean } | null>(null);
   const printing = usePrinting();

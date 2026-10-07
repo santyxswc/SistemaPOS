@@ -1,5 +1,6 @@
 import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken, setUnauthorizedHandler } from "./api";
+import { clearCarts } from "./cartStore";
 import { InvoicingBanner } from "./components/Invoicing";
 import { LicenseBanner } from "./components/License";
 import { Toaster } from "./components/ui";
@@ -68,6 +69,7 @@ export function App() {
     setToken(null);
     setTokenState(null);
     setMe(null);
+    clearCarts();
   }, []);
 
   useEffect(() => setUnauthorizedHandler(logout), [logout]);

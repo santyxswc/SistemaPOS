@@ -270,6 +270,8 @@ def cash_report(value: CashSessionReport) -> Json:
         "voided_count": value.voided_count,
         "sales_total": money(value.sales_total),
         "totals_by_method": [payment_total(t) for t in value.totals_by_method],
+        "units_sold": quantity(sum((p.quantity for p in value.products), Decimal(0))),
+        "products": [product_sales(p) for p in value.products],
     }
 
 

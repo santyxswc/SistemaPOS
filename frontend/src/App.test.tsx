@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { clearCarts } from "./cartStore";
 import type { Me, Product, Settings } from "./types";
 
 const SETTINGS: Settings = {
@@ -135,6 +136,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  clearCarts();
   vi.unstubAllGlobals();
 });
 
@@ -222,6 +224,24 @@ describe("venta en la caja", () => {
     await user.type(amount, "20000");
     expect(within(dialog).getByText(/Solo el efectivo puede dar vueltas/)).toBeTruthy();
     expect(confirm).toHaveProperty("disabled", true);
+  });
+
+  it("la venta en curso sigue ahí al volver de otra pantalla y se borra al salir", async () => {
+    mockServer(cashierServer(() => ({ status: 201, body: SALE })));
+    const user = await loginAndOpenCash();
+    await user.type(await screen.findByLabelText("Buscar producto"), "7702511000014{Enter}");
+    await screen.findByText("Arroz Diana 500 g");
+
+    await user.keyboard("{F3}");
+    await waitFor(() => expect(screen.queryByLabelText("Buscar producto")).toBeNull());
+    await user.keyboard("{F1}");
+    expect(await screen.findByText("Arroz Diana 500 g")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Salir" }));
+    await user.type(await screen.findByLabelText("Usuario"), "caja1");
+    await user.type(screen.getByLabelText("Contraseña"), "clave-segura-2");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+    expect(await screen.findByText(/Escanee un código de barras/)).toBeTruthy();
   });
 
   it("el cajero no ve las pantallas de administración", async () => {

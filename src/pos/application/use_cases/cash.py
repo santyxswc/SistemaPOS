@@ -11,7 +11,7 @@ from ...domain.shared.values import Money
 from ...domain.users import Permission
 from ..actor import Actor
 from ..common import get_or_404, page_size
-from ..ports import Clock, PaymentTotal, SalesFilter, UnitOfWork, UnitOfWorkFactory
+from ..ports import Clock, PaymentTotal, ProductSales, SalesFilter, UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,11 @@ class CashSessionReport:
     voided_count: int
     sales_total: Money
     totals_by_method: list[PaymentTotal]
+    products: list[ProductSales]  # lo vendido en el turno, de lo más vendido a lo menos
+
+
+# Un turno no vende miles de productos distintos; el tope solo evita respuestas enormes.
+_PRODUCTS_PER_REPORT = 500
 
 
 def build_cash_report(uow: UnitOfWork, session: CashSession) -> CashSessionReport:
@@ -32,6 +37,7 @@ def build_cash_report(uow: UnitOfWork, session: CashSession) -> CashSessionRepor
         voided_count=totals.voided_count,
         sales_total=totals.total,
         totals_by_method=uow.sales_reports.totals_by_payment_method(where),
+        products=uow.sales_reports.top_products(where, _PRODUCTS_PER_REPORT),
     )
 
 

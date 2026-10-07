@@ -5,7 +5,7 @@ import { api } from "../api";
 import { usePrinting } from "../components/Printing";
 import { Receipt } from "../components/Receipt";
 import { Empty, ErrorAlert, Field, Modal, formatDateTime, toast, todayISO, useAction, useLoad } from "../components/ui";
-import { formatMoney, toCents } from "../money";
+import { formatMoney, formatQuantity, toCents } from "../money";
 import { useSession } from "../session";
 import type { Items, Sale } from "../types";
 
@@ -17,6 +17,7 @@ export function SalesPage() {
 
   const items = sales.data?.items ?? [];
   const completed = items.filter((sale) => sale.status === "completed");
+  const units = completed.reduce((sum, sale) => sum + saleUnits(sale), 0);
 
   return (
     <>
@@ -33,7 +34,8 @@ export function SalesPage() {
       </div>
       <ErrorAlert error={sales.error} />
       <p className="muted">
-        {completed.length} ventas · {formatMoney(completed.reduce((sum, sale) => sum + toCents(sale.total), 0))}
+        {completed.length} ventas · {formatQuantity(units)} productos ·{" "}
+        {formatMoney(completed.reduce((sum, sale) => sum + toCents(sale.total), 0))}
         {items.length === 200 && " · se muestran las 200 más recientes"}
       </p>
       <section className="card table-wrap">
@@ -46,6 +48,7 @@ export function SalesPage() {
                 <th>#</th>
                 <th>Fecha</th>
                 <th>Productos</th>
+                <th className="num">Cant.</th>
                 <th>Pago</th>
                 <th>Estado</th>
                 <th className="num">Total</th>
@@ -56,9 +59,8 @@ export function SalesPage() {
                 <tr key={sale.id} className="clickable" onClick={() => setSelected(sale)}>
                   <td>{sale.number}</td>
                   <td>{formatDateTime(sale.created_at)}</td>
-                  <td className="small">
-                    {sale.lines.map((line) => line.description).join(", ").slice(0, 60)}
-                  </td>
+                  <td className="small">{describeLines(sale)}</td>
+                  <td className="num">{formatQuantity(saleUnits(sale))}</td>
                   <td className="small">{sale.payments.map((p) => p.name).join(" + ")}</td>
                   <td>
                     {sale.status === "voided" ? (
@@ -87,6 +89,18 @@ export function SalesPage() {
       )}
     </>
   );
+}
+
+// Cantidades en milésimas para sumar sin errores de redondeo (se venden kilos y litros).
+function saleUnits(sale: Sale): number {
+  return sale.lines.reduce((sum, line) => sum + Math.round(Number(line.quantity) * 1000), 0) / 1000;
+}
+
+function describeLines(sale: Sale): string {
+  const text = sale.lines
+    .map((line) => (Number(line.quantity) === 1 ? line.description : `${formatQuantity(line.quantity)} × ${line.description}`))
+    .join(", ");
+  return text.length > 80 ? `${text.slice(0, 79)}…` : text;
 }
 
 function SaleModal(props: { sale: Sale; onClose: () => void; onVoided: (sale: Sale) => void }) {

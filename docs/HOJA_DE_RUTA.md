@@ -19,7 +19,7 @@ Documento de trabajo para retomar el proyecto. Estado al **6 de octubre de 2026*
 | Primera vez | Asistente en el navegador: nombre del negocio y administrador, sin consola. |
 | Instalador Windows | `setup.exe` y `.zip` con PyInstaller + Inno Setup. El cliente no necesita Python. Probado: instalar, usar, respaldar, desinstalar sin perder datos. |
 | Robustez | Ventas idempotentes (un reintento no duplica), consultas que no bloquean las ventas, límite de intentos de login, reportes calculados en SQL, respaldos verificados. |
-| Calidad | 203 pruebas de backend + 25 de frontend. GitHub Actions las corre en Windows y Linux. |
+| Calidad | 204 pruebas de backend + 26 de frontend. GitHub Actions las corre en Windows y Linux. |
 
 ### Versión 0.3.0, segunda parte (6 de octubre de 2026, tarde)
 

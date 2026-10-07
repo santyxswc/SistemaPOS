@@ -1,6 +1,6 @@
 # Hoja de ruta del Punto de Venta
 
-Documento de trabajo para retomar el proyecto. Estado al **6 de octubre de 2026**, versión **0.3.0** (en el código; todavía sin etiqueta publicada).
+Documento de trabajo para retomar el proyecto. Estado al **6 de octubre de 2026**, versión **0.4.0**. El resumen de lo último que se hizo y lo que falta está en [`ESTADO.md`](ESTADO.md); cómo quitar o poner funciones por cliente, en [`MODULOS.md`](MODULOS.md).
 
 ---
 
@@ -19,7 +19,17 @@ Documento de trabajo para retomar el proyecto. Estado al **6 de octubre de 2026*
 | Primera vez | Asistente en el navegador: nombre del negocio y administrador, sin consola. |
 | Instalador Windows | `setup.exe` y `.zip` con PyInstaller + Inno Setup. El cliente no necesita Python. Probado: instalar, usar, respaldar, desinstalar sin perder datos. |
 | Robustez | Ventas idempotentes (un reintento no duplica), consultas que no bloquean las ventas, límite de intentos de login, reportes calculados en SQL, respaldos verificados. |
-| Calidad | 204 pruebas de backend + 26 de frontend. GitHub Actions las corre en Windows y Linux. |
+| Calidad | 218 pruebas de backend + 28 de frontend. GitHub Actions las corre en Windows y Linux. |
+
+### Versión 0.4.0 (6 de octubre de 2026, noche)
+
+| Cambio | Detalle |
+| --- | --- |
+| Módulos por cliente | Clientes, fiado, proveedores, reportes, descuentos, permisos por rol, Excel, impresión directa, facturación, aviso de versiones y licencias son módulos que el técnico enciende o apaga en el `.env` del cliente o con `PuntoDeVentaConsola.exe modules off ...`. Un módulo apagado no tiene rutas, sus permisos desaparecen y la interfaz lo oculta. Ver [`MODULOS.md`](MODULOS.md). |
+| Licencias apagadas | El sistema ya no exige licencia: sin el módulo no hay periodo de prueba ni límite de usuarios. El código sigue ahí; se enciende con `modules on licencias`. |
+| Logo del negocio | Ajustes → Logo del negocio (PNG, JPG o WebP de hasta 1 MB). Sale en el menú, en la pantalla de inicio de sesión y en el tiquete del navegador. Vive en la base de datos, así que viaja con los respaldos. |
+| Ventas y caja | Cantidades por producto en Ventas, unidades vendidas y tabla de productos vendidos por turno en Caja, y la venta en curso se conserva al cambiar de pantalla. |
+| Catálogo de ejemplo | `docs/ejemplos/productos-ejemplo.xlsx` con 116 productos de minimercado. |
 
 ### Versión 0.3.0, segunda parte (6 de octubre de 2026, tarde)
 
@@ -82,12 +92,7 @@ Cosas cortas que quedaron sin hacer o sin verificar.
 
 - [x] ~~Subir los commits a GitHub.~~ La primera parte de la 0.3.0 está en GitHub; los commits de la tarde del 6 de octubre se suben con `git push origin main`.
 - [x] ~~Revisar que el CI pase en GitHub.~~ Pasa en Windows y Linux.
-- [ ] **Publicar la versión 0.3.0** y comprobar que GitHub genera el `setup.exe` (el código ya dice 0.3.0 en los tres lugares):
-  ```bash
-  git push origin main
-  git tag v0.3.0 && git push origin v0.3.0
-  ```
-  Revise el flujo "Versión para Windows". Si falla, el registro dice en qué paso. Con el *Release* publicado, las instalaciones verán el aviso de versión nueva desde la siguiente.
+- [x] ~~Publicar la versión 0.3.0.~~ Publicada el 6 de octubre de 2026; GitHub generó el `setup.exe`. La 0.4.0 se publica igual (`git tag v0.4.0 && git push origin v0.4.0`).
 - [x] ~~Revisar la interfaz en un navegador.~~ Hecho con Chromium (ver "Cambios sin publicar"). Igual conviene que usted la recorra en el computador de un cliente con Windows, con la pantalla y la resolución reales.
 - [ ] **Imprimir un tiquete real** en una impresora térmica de 80 mm, de las dos formas: desde el navegador y con **impresión directa** (Ajustes → Impresora de tiquetes → Imprimir prueba). Revise tildes, el corte del papel y que el cajón abra con una venta en efectivo. La impresión directa se probó con una impresora de red simulada y la cola de Windows se verificó (lista las impresoras y reporta una que no existe), pero no con papel.
 - [ ] **Probar el instalador en un computador limpio** (otro PC, o una máquina virtual con Windows 10/11 recién instalado). Solo se ha probado en el equipo de desarrollo.
@@ -98,7 +103,9 @@ Cosas cortas que quedaron sin hacer o sin verificar.
 
 ## 3. Antes de vender: lo que falta (en orden de prioridad)
 
-### 3.1 Proteger el plan que vende (licencias) — ✅ **hecho** (falta la versión publicada)
+### 3.1 Proteger el plan que vende (licencias) — ✅ **hecho, y apagado desde la 0.4.0**
+
+Desde la 0.4.0 las licencias son un **módulo apagado de fábrica**: los clientes actuales ya acordaron el sistema y no necesitan código. Todo lo que sigue aplica solo a una instalación con `modules on licencias`.
 
 **Cómo quedó:**
 - `domain/licensing.py` tiene **todas las reglas comerciales** en constantes: `TRIAL_DAYS = 30`, `TRIAL_MAX_USERS = 3`, `EXPIRED_MAX_USERS = 1`, `WARN_DAYS_BEFORE_EXPIRY = 15`. Cámbielas ahí si quiere otra política.

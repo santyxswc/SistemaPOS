@@ -1,8 +1,12 @@
-# Sistema POS para negocios pequeños
+# Sistema POS para tiendas y restaurantes
 
-Punto de venta para tiendas, minimercados, cafeterías y restaurantes pequeños: ventas con lector de código de barras, caja diaria con arqueo, pagos en efectivo, Nequi, Daviplata, tarjeta, mixtos y fiado, usuarios con roles (administrador, supervisor y cajero) y permisos que el dueño ajusta, inventario con alertas y kárdex, proveedores con compras y cuentas por pagar, clientes con cuentas por cobrar, reportes, impresión directa en impresoras térmicas con apertura del cajón, bandeja de salida para la facturación electrónica, carga de productos desde Excel, exportación para el contador, respaldos automáticos, aviso de versiones nuevas y licencias por plan.
+Punto de venta para tiendas, minimercados, cafeterías y restaurantes (pensado sobre todo para negocios medianos): ventas con lector de código de barras, caja diaria con arqueo, pagos en efectivo, Nequi, Daviplata, tarjeta, mixtos y fiado, usuarios con roles (administrador, supervisor y cajero) y permisos que el dueño ajusta, inventario con alertas y kárdex, proveedores con compras y cuentas por pagar, clientes con cuentas por cobrar, reportes, impresión directa en impresoras térmicas con apertura del cajón, bandeja de salida para la facturación electrónica, carga de productos desde Excel, exportación para el contador, respaldos automáticos, logo del negocio y aviso de versiones nuevas.
 
-El mismo código sirve para cualquier negocio: lo que cambia de un cliente a otro (impuestos, métodos de pago, fiados, carpeta de respaldo) es **configuración** que el dueño cambia desde la pantalla de Ajustes; el plan comprado (cuántos usuarios) lo fija una **licencia firmada** que el negocio no puede alterar; y lo que necesita código nuevo (otra base de datos, facturación electrónica) entra por **puntos de extensión** sin tocar las reglas de negocio.
+El mismo código sirve para cualquier negocio, en tres niveles:
+
+1. **Módulos** (los decide el técnico por cliente): cada función opcional (clientes, fiado, proveedores, reportes, descuentos, permisos por rol, Excel, impresión directa, facturación, aviso de versiones, licencias) se enciende o apaga en el `.env` del cliente o con `PuntoDeVentaConsola.exe modules off proveedores`. Quitar una pestaña que un cliente no quiere toma un minuto y no cambia el código. Ver [`docs/MODULOS.md`](docs/MODULOS.md).
+2. **Ajustes** (los decide el dueño): impuestos, métodos de pago, datos del tiquete, logo, impresora, carpeta de respaldo.
+3. **Puntos de extensión** (código nuevo sin tocar las reglas de negocio): otra base de datos, un proveedor de facturación electrónica, otra impresora.
 
 ## Instalación en el computador de un cliente (Windows)
 
@@ -10,9 +14,10 @@ El cliente **no necesita instalar Python ni nada más**.
 
 1. Ejecute **`PuntoDeVenta-<versión>-setup.exe`**. No pide permisos de administrador; ofrece crear un acceso directo en el escritorio, abrir el sistema al encender el computador y programar el respaldo diario.
 2. Abra **Punto de Venta**. La primera vez, el navegador pide el nombre del negocio y crea la cuenta del administrador.
-3. Cargue los productos desde Excel (**Productos → Importar**; hay una plantilla de ejemplo, y `docs/ejemplos/productos-ejemplo.xlsx` trae 116 productos de minimercado para probar) y, en **Ajustes**, elija una carpeta de respaldo adicional (USB u OneDrive) y pegue el código de licencia.
+3. Cargue los productos desde Excel (**Productos → Importar**; hay una plantilla de ejemplo, y `docs/ejemplos/productos-ejemplo.xlsx` trae 116 productos de minimercado para probar) y, en **Ajustes**, suba el logo y elija una carpeta de respaldo adicional (USB u OneDrive).
+4. Si el cliente no contrató alguna función, apáguela: `PuntoDeVentaConsola.exe modules off proveedores reportes` y abra el sistema de nuevo.
 
-El sistema no abre ventanas negras: queda como un **ícono junto al reloj de Windows** con un menú para abrirlo, respaldar ahora, abrir la carpeta de datos o apagarlo. Abrirlo de nuevo cuando ya está abierto solo abre el navegador. Los comandos de soporte (`reset-password`, `license`) se ejecutan con **`PuntoDeVentaConsola.exe`**, que es el mismo programa con consola.
+El sistema no abre ventanas negras: queda como un **ícono junto al reloj de Windows** con un menú para abrirlo, respaldar ahora, abrir la carpeta de datos o apagarlo. Abrirlo de nuevo cuando ya está abierto solo abre el navegador. Los comandos de soporte (`modules`, `reset-password`) se ejecutan con **`PuntoDeVentaConsola.exe`**, que es el mismo programa con consola.
 
 Sin instalador, el `.zip` sirve igual: descomprima la carpeta `PuntoDeVenta` y abra `PuntoDeVenta.exe`.
 
@@ -25,7 +30,7 @@ Actualizar es ejecutar el instalador de la versión nueva: los datos no se tocan
 
 **Respaldos**: se hace uno al cerrar cada caja y, si se eligió al instalar, otro todos los días a las 10 p. m. (se conservan los últimos 30). En **Ajustes → Respaldos** se puede respaldar en cualquier momento y elegir una carpeta adicional (USB, OneDrive o Google Drive) donde se copia cada respaldo: así sobreviven a un disco dañado o a un robo. Para restaurar, cierre el sistema y reemplace `data\pos.sqlite3` por el respaldo elegido.
 
-**Licencia**: sin licencia, el sistema funciona completo 30 días. Después sigue vendiendo, pero no permite más de un usuario activo hasta que se pegue un código en **Ajustes → Licencia** (o `PuntoDeVentaConsola.exe license CODIGO`). Los códigos se emiten con `packaging/licencia.py`, que solo tiene el proveedor (ver `docs/HOJA_DE_RUTA.md`).
+**Licencias**: vienen **apagadas**: no hay periodo de prueba ni límite de usuarios. Si algún día se necesitan, se encienden por cliente con `modules on licencias`; entonces rige el límite del plan y los códigos se emiten con `packaging/licencia.py`, que solo tiene el proveedor (ver `docs/HOJA_DE_RUTA.md`).
 
 **Red local**: para usarlo desde otros computadores, ponga `POS_HOST=0.0.0.0` en el `.env` de la carpeta de datos y entre a `http://IP-DEL-SERVIDOR:8000`.
 
@@ -74,7 +79,8 @@ Los mismos comandos funcionan con `PuntoDeVenta.exe <comando>`:
 | `backup [--dir] [--keep 30]` | Respaldo en caliente, verificado con `integrity_check`; también lo copia a la carpeta adicional de Ajustes. |
 | `create-admin` | Crea el primer administrador. |
 | `reset-password --username X` | Contraseña nueva para un usuario (soporte, cuando el dueño la olvida). `POS_NEW_PASSWORD` la evita escribir. |
-| `license [CODIGO]` | Muestra el estado de la licencia o instala un código. |
+| `modules [on\|off nombres...]` | Lista los módulos del cliente, o los enciende/apaga (queda en su `.env`). |
+| `license [CODIGO]` | Con el módulo de licencias encendido: estado de la licencia o instalación de un código. |
 
 ## Arquitectura
 
@@ -106,9 +112,11 @@ src/pos/
 │   ├── payments.py      Tipos de pago y su comportamiento (Strategy)
 │   ├── taxes.py         Impuesto incluido o agregado al precio (Strategy)
 │   ├── settings.py      Configuración por negocio
-│   ├── licensing.py     Plan, prueba y vencimiento de la licencia (reglas comerciales)
+│   ├── licensing.py     Plan, prueba y vencimiento de la licencia (módulo apagado de fábrica)
+│   ├── branding.py      Logo del negocio (formatos aceptados, tamaño)
 │   └── users.py         Roles y permisos (de fábrica y personalizados por el negocio)
 ├── application/
+│   ├── modules.py       Catálogo de módulos opcionales, sus requisitos y sus permisos
 │   ├── ports.py         Contratos: repositorios, unidad de trabajo, reportes, reloj, tokens...
 │   ├── actor.py         Usuario actual y verificación de permisos
 │   ├── receipts.py      El tiquete como documento (Builder), sin saber de impresoras
@@ -125,7 +133,8 @@ src/pos/
 frontend/src/
 ├── pages/               Una pantalla por archivo (Vender, Caja, Ventas, Productos...)
 ├── cart.ts, money.ts    Lógica pura del carrito y del dinero (con pruebas)
-└── App.tsx              Menú armado con los permisos del usuario
+├── cartStore.ts         La venta en curso, que sobrevive al cambiar de pantalla
+└── App.tsx              Menú armado con los módulos del negocio y los permisos del usuario
 ```
 
 ### SOLID y patrones, en el código
@@ -133,7 +142,7 @@ frontend/src/
 | Principio o patrón | Dónde se ve |
 | --- | --- |
 | Responsabilidad única | Cada caso de uso es una clase con un solo `execute` (`CreateSale`, `VoidSale`, `CloseCashSession`...). |
-| Abierto/cerrado | Un método de pago nuevo es configuración; un tipo de pago nuevo es una entrada en `payments.py`. Una pantalla nueva es una entrada en `ROUTES` (`App.tsx`). |
+| Abierto/cerrado | Un método de pago nuevo es configuración; un tipo de pago nuevo es una entrada en `payments.py`. Una pantalla nueva es una entrada en `ROUTES` (`App.tsx`); una sección de Ajustes, una entrada en `SECTIONS`; un módulo, una entrada en `CATALOG`. |
 | Sustitución de Liskov | `TaxIncludedPolicy` y `TaxExcludedPolicy` son intercambiables donde se espera una `TaxPolicy`. |
 | Segregación de interfaces | Un puerto pequeño por necesidad (`Clock`, `PasswordHasher`, `TokenService`, `LoginThrottle`, `LicenseVerifier`, `BackupService`, un repositorio por agregado). |
 | Inversión de dependencias | Los casos de uso dependen de `ports.py`; SQLite y JWT dependen de esos contratos, no al revés. |
@@ -142,16 +151,17 @@ frontend/src/
 | Idempotencia | `POST /sales` con `Idempotency-Key`: si la red falla y la caja reintenta, la venta no se duplica. |
 | Eventos de dominio | `SaleCompleted`, `StockLow` y `CashSessionClosed` se publican solo después de confirmar la transacción. Cerrar la caja dispara un respaldo sin que la caja sepa de respaldos. |
 | Bandeja de salida (*outbox*) | El documento electrónico de cada venta se guarda en la misma transacción de la venta; un proceso de fondo lo envía y reintenta. El evento `DocumentQueued` lo despierta al instante (Observer). |
-| Objeto nulo | `DisabledInvoiceOutbox` y `NoReleaseSource`: sin facturación ni aviso de versiones, el código que los usa no pregunta "¿está activo?". |
+| Módulos (*feature toggles*) | `ModuleSet` decide al iniciar qué módulos existen: sus rutas se registran o no (`OPTIONAL_ROUTES`), sus permisos se quitan a todos los usuarios (`Actor.limited_to`) y la interfaz arma el menú con ellos. Sin `if` repartidos por el código. |
+| Objeto nulo | `NoUserLimit`, `DisabledInvoiceOutbox` y `NoReleaseSource`: con el módulo apagado, el código que los usa no pregunta "¿está activo?". |
 | Builder y Strategy | `ReceiptBuilder` arma el tiquete; `EscPosEncoder` lo traduce y el transporte (cola de Windows, red o archivo) se elige según la impresora configurada. |
 | Fábrica | `create_invoice_provider` elige el proveedor de facturación por nombre (`POS_INVOICE_PROVIDER`). |
-| Servicio de aplicación | `LicensePolicy` decide qué permite la licencia hoy; lo usan los casos de uso de usuarios (y mañana las funciones que se vendan aparte). |
+| Servicio de aplicación | `LicensePolicy` decide qué permite la licencia hoy; es el `UserQuota` de la instalación cuando el módulo de licencias está encendido. |
 | Firma digital | Las licencias se firman con Ed25519: el programa trae solo la clave pública, así que puede comprobar una licencia pero no fabricarla. |
 | Raíz de composición | `bootstrap.py` es el único archivo que conoce las clases concretas. |
 
 ## Cómo adaptarlo a cada negocio
 
-Sin escribir código, desde **Ajustes** (o `PATCH /api/v1/settings`):
+Sin escribir código, el técnico apaga lo que el cliente no contrató (`modules off ...`, ver [`docs/MODULOS.md`](docs/MODULOS.md)) y el dueño ajusta el resto desde **Ajustes** (o `PATCH /api/v1/settings`):
 
 | Necesidad del cliente | Ajuste |
 | --- | --- |
@@ -166,7 +176,9 @@ Sin escribir código, desde **Ajustes** (o `PATCH /api/v1/settings`):
 | Que el cajero vea reportes, o que no reciba abonos | Usuarios → Permisos por rol |
 | Imprimir sin el cuadro del navegador y abrir el cajón | Ajustes → Impresora de tiquetes (Windows o de red) |
 | Compras a crédito a los proveedores | Proveedores → Registrar compra, forma de pago "A crédito" |
-| Límite de usuarios según el plan vendido | Licencia: `python packaging/licencia.py emitir --usuarios 3 ...` (ya no es un ajuste: el cliente no lo puede cambiar) |
+| Logo en el menú, la pantalla de inicio y el tiquete | Ajustes → Logo del negocio |
+| No quiere proveedores, reportes o fiado | `modules off proveedores reportes fiado` (el técnico) |
+| Límite de usuarios según el plan vendido | `modules on licencias` y una licencia emitida con `packaging/licencia.py` |
 
 Con código, en los puntos de extensión previstos:
 
@@ -179,7 +191,7 @@ Con código, en los puntos de extensión previstos:
 
 ## API
 
-Todas las rutas, salvo el login y `/health`, piden el encabezado `Authorization: Bearer <token>`. El dinero viaja como texto (`"12500.00"`) para no perder exactitud.
+Todas las rutas, salvo el login, `/branding` y `/health`, piden el encabezado `Authorization: Bearer <token>`. El dinero viaja como texto (`"12500.00"`) para no perder exactitud.
 
 ```http
 POST /api/v1/auth/login
@@ -197,8 +209,9 @@ Idempotency-Key: 6f1c2a0e-...   (opcional, recomendado: la misma clave en cada r
 | --- | --- |
 | Acceso | `POST /auth/login`, `GET /auth/me`, `POST /auth/change-password` |
 | Usuarios | `GET /users`, `POST /users`, `PATCH /users/{id}`, `GET /roles`, `PUT /roles/{rol}` (`{"permissions": [...]}` o `{"reset": true}`) |
-| Configuración | `GET /settings`, `PATCH /settings`, `GET /updates` |
-| Licencia | `GET /license`, `POST /license` (`{"code": "POS1...."}`) |
+| Configuración | `GET /settings`, `PATCH /settings`, `GET /updates`, `GET /modules` |
+| Marca | `GET /branding` (público), `GET /branding/logo` (público), `PUT /branding/logo` (archivo en `file`), `DELETE /branding/logo` |
+| Licencia (módulo) | `GET /license`, `POST /license` (`{"code": "POS1...."}`) |
 | Respaldos | `GET /backups`, `POST /backups` |
 | Catálogo | `GET/POST /categories`, `GET/POST /products`, `GET /products/lookup?code=`, `GET/PATCH /products/{id}`, `GET /products/export` (Excel), `GET /products/import-template`, `POST /products/import?dry_run=true&update_existing=false` (archivo en `file`) |
 | Inventario | `POST /inventory/purchases`, `POST /inventory/adjustments`, `GET /inventory/low-stock`, `GET /inventory/movements?product_id=` |
@@ -217,16 +230,16 @@ Todos los errores tienen la misma forma, con mensajes listos para mostrar al usu
 {"error": {"code": "insufficient_stock", "message": "Stock insuficiente de «Arroz 500 g»: hay 1 y se piden 2"}}
 ```
 
-400 dato inválido, 401 sin sesión, 403 sin permiso, 404 no existe, 409 duplicado o conflicto, 422 regla de negocio, 429 demasiados intentos de inicio de sesión.
+400 dato inválido, 401 sin sesión, 403 sin permiso, 404 no existe (también las rutas de un módulo apagado), 409 duplicado o conflicto, 422 regla de negocio, 429 demasiados intentos de inicio de sesión.
 
 ## Pruebas
 
 ```bash
-python -m pytest              # 204 pruebas del backend
-cd frontend && npm test       # 26 pruebas del frontend
+python -m pytest              # 218 pruebas del backend
+cd frontend && npm test       # 28 pruebas del frontend
 ```
 
-Backend: dominio puro, casos de uso sobre SQLite real, la API HTTP de punta a punta, concurrencia (dos cajas vendiendo la última unidad; lecturas que no esperan a quien escribe), migraciones sobre bases existentes, equivalencia de los reportes en SQL contra el cálculo del dominio, idempotencia, freno de login, respaldos (incluida una USB desconectada), licencias (firma alterada, vencimiento, límite de usuarios), importación y exportación de Excel y CSV, compras y cuentas por pagar, permisos por rol, la bandeja de facturación con un proveedor falso (fallas, rechazos, notas crédito), el tiquete en ESC/POS con una impresora de red simulada y el aviso de versiones. Frontend: dinero y carrito, el flujo de venta en un DOM simulado (cobro con vueltas, reintento tras falla de red, validaciones, permisos, impresión directa), la activación de la licencia, la importación de productos, las compras, los permisos por rol, la revisión de documentos electrónicos y el aviso de versión nueva. GitHub Actions corre todo en Windows y Linux en cada cambio.
+Backend: dominio puro, casos de uso sobre SQLite real, la API HTTP de punta a punta, concurrencia (dos cajas vendiendo la última unidad; lecturas que no esperan a quien escribe), migraciones sobre bases existentes, equivalencia de los reportes en SQL contra el cálculo del dominio, idempotencia, freno de login, respaldos (incluida una USB desconectada), módulos (rutas, permisos y fiado apagados; permisos ocultos que se conservan), logo, licencias (firma alterada, vencimiento, límite de usuarios), importación y exportación de Excel y CSV, compras y cuentas por pagar, permisos por rol, la bandeja de facturación con un proveedor falso (fallas, rechazos, notas crédito), el tiquete en ESC/POS con una impresora de red simulada y el aviso de versiones. Frontend: dinero y carrito, el flujo de venta en un DOM simulado (cobro con vueltas, reintento tras falla de red, validaciones, permisos, impresión directa), la activación de la licencia, la importación de productos, las compras, los permisos por rol, la revisión de documentos electrónicos, el aviso de versión nueva, los módulos apagados y la subida del logo. GitHub Actions corre todo en Windows y Linux en cada cambio.
 
 ## Decisiones técnicas
 
@@ -241,7 +254,7 @@ Backend: dominio puro, casos de uso sobre SQLite real, la API HTTP de punta a pu
 
 ## Próximos pasos
 
-El plan detallado, con prioridades y riesgos, está en [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md). En resumen:
+Lo que se hizo en la última versión y lo que falta está en [`docs/ESTADO.md`](docs/ESTADO.md); el plan detallado, con prioridades y riesgos, en [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md). En resumen:
 
 1. Conectar un proveedor de facturación electrónica autorizado por la DIAN (la bandeja de salida ya está lista).
 2. Probar la impresión directa con impresoras térmicas reales y el lector de código de barras.

@@ -27,7 +27,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: pip install -r requirements-build.txt
       - run: python -X utf8 packaging/build.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: PuntoDeVenta-windows
           path: |

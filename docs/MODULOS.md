@@ -4,7 +4,7 @@ Cada cliente puede tener un sistema distinto **sin cambiar el código**. Lo que 
 
 > Vender · Caja · Ventas · Productos e inventario · Usuarios · Ajustes · Respaldos · Logo
 
-Todo lo demás es un **módulo** que usted (el técnico) enciende o apaga en el computador de cada cliente. El dueño del negocio no lo ve ni lo puede cambiar.
+Todo lo demás es un **módulo** que el técnico enciende o apaga en el computador de cada cliente. El dueño del negocio no lo ve ni lo puede cambiar.
 
 ## Los módulos
 
@@ -63,7 +63,7 @@ Un nombre mal escrito no pasa en silencio: el sistema no arranca y el mensaje di
 Ejemplo: un módulo `mesas` para restaurantes.
 
 1. **Backend, catálogo:** en `src/pos/application/modules.py` agregue `TABLES = "mesas"` al enum `Module` y su `ModuleInfo` a `CATALOG` (nombre, descripción, si viene encendido, de qué depende y qué permisos trae).
-2. **Backend, código:** dominio, casos de uso y repositorio como cualquier otra función (ver `docs/HOJA_DE_RUTA.md`, sección 7). Las rutas van en su propio archivo `presentation/http/routes/tables.py`.
+2. **Backend, código:** dominio, casos de uso y repositorio como cualquier otra función (ver [`PERSONALIZACION.md`](PERSONALIZACION.md#recetas-para-extender-el-código)). Las rutas van en su propio archivo `presentation/http/routes/tables.py`.
 3. **Backend, rutas:** en `presentation/http/app.py` agregue `Module.TABLES: (tables,)` a `OPTIONAL_ROUTES`.
 4. **Interfaz:** agregue `"mesas"` al tipo `ModuleId` (`frontend/src/types.ts`) y su pantalla a `ROUTES` en `App.tsx` con `module: "mesas"`. Si tiene una sección en Ajustes, agréguela a `SECTIONS` en `pages/Settings.tsx` con `module: "mesas"`.
 5. **Pruebas:** una prueba con el módulo apagado (`modules = ModuleSet.configure(disable={Module.TABLES})`, ver `tests/integration/test_modules.py`).
